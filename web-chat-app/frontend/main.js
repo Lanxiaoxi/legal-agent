@@ -6,7 +6,11 @@ const CONFIG = {
   STORAGE_KEY: 'chat_history',
   MAX_RETRIES: 3,
   LOADING_DELAY: 200,
-  OPTIMISTIC_UPDATE_DELAY: 100
+  OPTIMISTIC_UPDATE_DELAY: 100,
+  MODELS: [
+    { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
+    { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' }
+  ]
 };
 
 // State
@@ -18,7 +22,8 @@ let state = {
   preservedInput: '',
   isStreaming: false,
   currentStreamingContent: '',
-  currentStreamingId: null
+  currentStreamingId: null,
+  selectedModel: CONFIG.MODELS[0].value
 };
 
 // DOM Elements
@@ -62,6 +67,7 @@ function saveHistory() {
 function setupEventListeners() {
   document.addEventListener('click', handleClick);
   document.addEventListener('keypress', handleKeyPress);
+  document.addEventListener('change', handleChange);
 }
 
 // Handle click events
@@ -72,6 +78,13 @@ function handleClick(e) {
     clearConversation();
   } else if (e.target.classList.contains('retry-btn')) {
     retryMessage();
+  }
+}
+
+// Handle change events
+function handleChange(e) {
+  if (e.target.classList.contains('model-select')) {
+    state.selectedModel = e.target.value;
   }
 }
 
@@ -152,7 +165,7 @@ async function sendMessage() {
     const response = await fetch(CONFIG.API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, history })
+      body: JSON.stringify({ message, history, model: state.selectedModel })
     });
 
     if (!response.ok) {
@@ -307,7 +320,12 @@ function render() {
     <div class="chat-container">
       <div class="chat-header">
         <h1>AI Legal Advisor</h1>
-        <button class="clear-btn">Clear Conversation</button>
+        <div class="header-controls">
+          <select class="model-select" ${state.isLoading ? 'disabled' : ''}>
+            ${CONFIG.MODELS.map(m => `<option value="${m.value}" ${state.selectedModel === m.value ? 'selected' : ''}>${m.label}</option>`).join('')}
+          </select>
+          <button class="clear-btn">Clear Conversation</button>
+        </div>
       </div>
       <div class="message-list"></div>
       ${state.isLoading ? '<div class="loading-indicator">Thinking...</div>' : ''}

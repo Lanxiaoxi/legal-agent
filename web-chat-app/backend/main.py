@@ -24,6 +24,7 @@ def load_config() -> dict:
         "deepseekApiKey": os.getenv("DEEPSEEK_API_KEY"),
         "corsOrigin": os.getenv("CORS_ORIGIN", "http://localhost:3000"),
         "deepseekBaseUrl": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
         "requestTimeout": int(os.getenv("REQUEST_TIMEOUT", "30")),
         "maxHistoryMessages": int(os.getenv("MAX_HISTORY_MESSAGES", "20"))
     }
@@ -38,6 +39,7 @@ def load_config() -> dict:
                     config["deepseekApiKey"] = file_config.get("deepseekApiKey")
                     config["corsOrigin"] = file_config.get("corsOrigin", config["corsOrigin"])
                     config["deepseekBaseUrl"] = file_config.get("deepseekBaseUrl", config["deepseekBaseUrl"])
+                    config["model"] = file_config.get("model", config["model"])
                     config["requestTimeout"] = file_config.get("requestTimeout", config["requestTimeout"])
                     config["maxHistoryMessages"] = file_config.get("maxHistoryMessages", config["maxHistoryMessages"])
             except Exception as e:
@@ -70,6 +72,10 @@ class ChatRequest:
         self.history = history or []
 
 
+# Valid models
+VALID_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"]
+
+
 def validate_chat_request(data: dict) -> tuple[bool, Optional[str]]:
     """Validate chat request data"""
     if not isinstance(data, dict):
@@ -84,6 +90,11 @@ def validate_chat_request(data: dict) -> tuple[bool, Optional[str]]:
     if not data["message"].strip():
         return False, "message cannot be empty"
     
+    # Validate model if provided
+    model = data.get("model")
+    if model and model not in VALID_MODELS:
+        return False, f"Invalid model. Valid models: {', '.join(VALID_MODELS)}"
+    
     return True, None
 
 
@@ -92,7 +103,7 @@ def limit_history(messages: list, max_count: int = 20) -> list:
     return messages[-max_count:] if messages else []
 
 
-async def stream_chat_response(message: str, history: list) -> StreamingResponse:
+async def stream_chat_response(message: str, history: list, model: str = None) -> StreamingResponse:
     """Stream chat response from DeepSeek API"""
     
     # Build messages array with system prompt
@@ -114,8 +125,11 @@ async def stream_chat_response(message: str, history: list) -> StreamingResponse
         "Authorization": f"Bearer {CONFIG['deepseekApiKey']}",
         "Content-Type": "application/json"
     }
+    # Use user-selected model or fall back to config default
+    selected_model = model or CONFIG["model"]
+    
     payload = {
-        "model": "deepseek-chat",
+        "model": selected_model,
         "messages": messages,
         "stream": True
     }
@@ -179,9 +193,10 @@ async def chat(request: Request):
     
     message = data["message"]
     history = data.get("history", [])
+    model = data.get("model")  # User-selected model
     
     # Stream response
-    return await stream_chat_response(message, history)
+    return await stream_chat_response(message, history, model)
 
 
 @app.options("/api/chat")
