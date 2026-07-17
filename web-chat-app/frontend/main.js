@@ -21,6 +21,31 @@ const CONFIG = {
   ]
 };
 
+// LineBreakTransformer: 将连续流按行分割
+class LineBreakTransformer {
+  constructor() {
+    this.buffer = '';
+  }
+
+  transform(chunk, controller) {
+    this.buffer += chunk;
+    const lines = this.buffer.split('\n');
+    this.buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.trim()) {
+        controller.enqueue(line);
+      }
+    }
+  }
+
+  flush(controller) {
+    if (this.buffer) {
+      controller.enqueue(this.buffer);
+    }
+  }
+}
+
 // State
 let state = {
   sessions: {},           // { sessionId: { id, title, messages: [], createdAt, updatedAt, model } }
@@ -329,22 +354,24 @@ async function sendMessage() {
       throw new Error(errorData.error || `HTTP ${response.status}`);
     }
 
-    // Handle streaming response
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
+    // Handle streaming response - 使用 LineBreakTransformer 实现真正的逐行流式处理
+    const reader = response.body
+      .pipeThrough(new TextDecoderStream())
+      .pipeThrough(new TransformStream(new LineBreakTransformer()))
+      .getReader();
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n');
+      const line = value;
+      if (line.startsWith('data: ')) {
+        try {
+          const data = JSON.parse(line.slice(6));
 
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            
+          // 添加延迟，方便观察流式输出过程
+          await new Promise(r => setTimeout(r, 25));
+
             // Update content (streamed, append)
             if (data.content !== undefined && data.content !== null) {
               state.currentStreamingContent += data.content;
@@ -443,10 +470,9 @@ async function sendMessage() {
           }
         }
       }
-    }
-  } catch (error) {
-    state.isStreaming = false;
-    handleError(error);
+    } catch (error) {
+      state.isStreaming = false;
+      handleError(error);
   } finally {
     setLoading(false);
     input.disabled = false;
@@ -552,6 +578,7 @@ function clearConversation() {
 function scrollToBottom() {
   const list = elements.messageList;
   if (list) {
+    // 同步滚动，避免 renderMessages 的 innerHTML 重置滚动位置
     list.scrollTop = list.scrollHeight;
   }
 }
