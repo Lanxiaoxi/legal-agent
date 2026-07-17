@@ -10,6 +10,14 @@ const CONFIG = {
   MODELS: [
     { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
     { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' }
+  ],
+  REASONING_EFFORT: [
+    { value: 'high', label: 'High' },
+    { value: 'max', label: 'Max' }
+  ],
+  THINKING_OPTIONS: [
+    { value: true, label: 'On' },
+    { value: false, label: 'Off' }
   ]
 };
 
@@ -25,6 +33,8 @@ let state = {
   currentStreamingContent: '',
   currentStreamingId: null,
   selectedModel: CONFIG.MODELS[0].value,
+  reasoningEffort: 'high',  // high, max
+  thinkingEnabled: true,    // thinking mode on/off
   hasSession: true        // Track if there is an active session
 };
 
@@ -52,6 +62,15 @@ function loadHistory() {
       state.sessions = data.sessions || {};
       state.currentSessionId = data.currentSessionId || null;
       state.hasSession = Object.keys(state.sessions).length > 0;
+      
+      // Load current session settings
+      if (state.currentSessionId && state.sessions[state.currentSessionId]) {
+        state.selectedModel = state.sessions[state.currentSessionId].model || CONFIG.MODELS[0].value;
+        state.reasoningEffort = state.sessions[state.currentSessionId].reasoningEffort || 'high';
+        state.thinkingEnabled = state.sessions[state.currentSessionId].thinkingEnabled !== undefined 
+          ? state.sessions[state.currentSessionId].thinkingEnabled 
+          : true;
+      }
       
       // If no sessions, create a default one
       if (Object.keys(state.sessions).length === 0) {
@@ -82,7 +101,10 @@ function saveHistory() {
     
     localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify({
       sessions: state.sessions,
-      currentSessionId: state.currentSessionId
+      currentSessionId: state.currentSessionId,
+      selectedModel: state.selectedModel,
+      reasoningEffort: state.reasoningEffort,
+      thinkingEnabled: state.thinkingEnabled
     }));
   } catch (e) {
     console.error('Failed to save sessions:', e);
@@ -98,7 +120,9 @@ function createNewSession() {
     messages: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    model: state.selectedModel
+    model: state.selectedModel,
+    reasoningEffort: state.reasoningEffort,
+    thinkingEnabled: state.thinkingEnabled
   };
   state.currentSessionId = sessionId;
   state.hasSession = true;
@@ -111,6 +135,10 @@ function switchSession(sessionId) {
   if (state.sessions[sessionId]) {
     state.currentSessionId = sessionId;
     state.selectedModel = state.sessions[sessionId].model || CONFIG.MODELS[0].value;
+    state.reasoningEffort = state.sessions[sessionId].reasoningEffort || 'high';
+    state.thinkingEnabled = state.sessions[sessionId].thinkingEnabled !== undefined 
+      ? state.sessions[sessionId].thinkingEnabled 
+      : true;
     state.error = null;
     saveHistory();
     render();
@@ -129,10 +157,13 @@ function deleteSession(sessionId) {
     state.currentSessionId = null;
     state.hasSession = false;
   } else if (wasCurrentSession) {
-    // If deleted current session, switch to another
+    // If deleted current session, switch to another and load its settings
     const remainingIds = Object.keys(state.sessions);
     state.currentSessionId = remainingIds[0];
-    state.selectedModel = state.sessions[remainingIds[0]].model || CONFIG.MODELS[0].value;
+    const newSession = state.sessions[remainingIds[0]];
+    state.selectedModel = newSession.model || CONFIG.MODELS[0].value;
+    state.reasoningEffort = newSession.reasoningEffort || 'high';
+    state.thinkingEnabled = newSession.thinkingEnabled !== undefined ? newSession.thinkingEnabled : true;
   }
   
   saveHistory();
@@ -186,6 +217,10 @@ function handleClick(e) {
 function handleChange(e) {
   if (e.target.classList.contains('model-select')) {
     state.selectedModel = e.target.value;
+  } else if (e.target.classList.contains('reasoning-select')) {
+    state.reasoningEffort = e.target.value;
+  } else if (e.target.classList.contains('thinking-select')) {
+    state.thinkingEnabled = e.target.value === 'true';
   }
 }
 
@@ -227,8 +262,10 @@ async function sendMessage() {
   setLoading(true);
   input.disabled = true;
 
-  // Update session model
+  // Update session model and reasoning effort
   session.model = state.selectedModel;
+  session.reasoningEffort = state.reasoningEffort;
+  session.thinkingEnabled = state.thinkingEnabled;
 
   // Create user message
   const userMessage = {
@@ -255,6 +292,7 @@ async function sendMessage() {
     id: generateId(),
     role: 'assistant',
     content: '',
+    reasoningContent: state.thinkingEnabled ? '' : undefined,
     timestamp: Date.now()
   };
 
@@ -263,6 +301,8 @@ async function sendMessage() {
   state.currentStreamingId = aiMessage.id;
   state.currentStreamingContent = '';
   state.isStreaming = true;
+  
+  // Render immediately so reasoning section exists
   renderMessages();
   scrollToBottom();
 
@@ -275,7 +315,13 @@ async function sendMessage() {
     const response = await fetch(CONFIG.API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, history, model: state.selectedModel })
+      body: JSON.stringify({ 
+        message, 
+        history, 
+        model: state.selectedModel,
+        reasoning_effort: state.reasoningEffort,
+        thinking: state.thinkingEnabled
+      })
     });
 
     if (!response.ok) {
@@ -298,13 +344,99 @@ async function sendMessage() {
         if (line.startsWith('data: ')) {
           try {
             const data = JSON.parse(line.slice(6));
-            if (data.content) {
+            
+            // Update content (streamed, append)
+            if (data.content !== undefined && data.content !== null) {
               state.currentStreamingContent += data.content;
-              updateStreamingMessage();
+              
+              // Update session data
+              const currentSession = getCurrentSession();
+              let reasoningContent = '';
+              if (currentSession) {
+                const msg = currentSession.messages.find(m => m.id === state.currentStreamingId);
+                if (msg) {
+                  msg.content = state.currentStreamingContent;
+                  reasoningContent = msg.reasoningContent || '';
+                }
+              }
+              
+              // Only update the content div directly, don't re-render entire messages
+              const messageEls = document.querySelectorAll('.message-assistant');
+              if (messageEls.length > 0) {
+                const lastAssistantMsg = messageEls[messageEls.length - 1];
+                let contentDiv = lastAssistantMsg.querySelector('.message-content');
+                
+                // If content div doesn't exist (was replaced), recreate it with reasoning section
+                if (!contentDiv) {
+                  const reasoningSectionHtml = `
+                    <div class="reasoning-section">
+                      <div class="reasoning-header" onclick="toggleReasoning(this)">
+                        <span class="reasoning-toggle">▶</span>
+                        <span>思考过程</span>
+                      </div>
+                      <div class="reasoning-content">${escapeHtml(reasoningContent)}</div>
+                    </div>
+                  `;
+                  lastAssistantMsg.innerHTML = reasoningSectionHtml + '<div class="message-content"></div>';
+                  contentDiv = lastAssistantMsg.querySelector('.message-content');
+                }
+                
+                if (contentDiv) {
+                  contentDiv.innerHTML = window.marked ? window.marked.parse(state.currentStreamingContent) : escapeHtml(state.currentStreamingContent);
+                }
+              }
+              scrollToBottom();
             }
+            
+            // Update reasoning content
+            if (data.reasoning_content !== undefined && data.reasoning_content !== null) {
+              const session = getCurrentSession();
+              if (session) {
+                const idx = session.messages.findIndex(m => m.id === state.currentStreamingId);
+                if (idx !== -1) {
+                  // Append new reasoning content (streaming sends incremental chunks)
+                  session.messages[idx].reasoningContent = (session.messages[idx].reasoningContent || '') + data.reasoning_content;
+                  
+                  // Find the assistant message element
+                  const messageEls = document.querySelectorAll('.message-assistant');
+                  if (messageEls.length > 0) {
+                    const lastAssistantMsg = messageEls[messageEls.length - 1];
+                    
+                    // Check if reasoning section exists
+                    let reasoningSection = lastAssistantMsg.querySelector('.reasoning-section');
+                    let reasoningContentEl;
+                    
+                    if (!reasoningSection) {
+                      // Create reasoning section structure
+                      reasoningSection = document.createElement('div');
+                      reasoningSection.className = 'reasoning-section';
+                      reasoningSection.innerHTML = `
+                        <div class="reasoning-header" onclick="toggleReasoning(this)">
+                          <span class="reasoning-toggle">▶</span>
+                          <span>思考过程</span>
+                        </div>
+                        <div class="reasoning-content"></div>
+                      `;
+                      lastAssistantMsg.insertBefore(reasoningSection, lastAssistantMsg.firstChild);
+                    }
+                    
+                    reasoningContentEl = reasoningSection.querySelector('.reasoning-content');
+                    
+                    if (reasoningContentEl && data.reasoning_content) {
+                      // Append new reasoning content instead of replacing
+                      reasoningContentEl.textContent += data.reasoning_content;
+                    }
+                  }
+                }
+              }
+            }
+            
             if (data.done) {
               state.isStreaming = false;
               finalizeStreamingMessage();
+            }
+            if (data.error) {
+              throw new Error(data.error);
             }
           } catch (e) {
             // Ignore parse errors for incomplete chunks
@@ -324,19 +456,8 @@ async function sendMessage() {
   }
 }
 
-// Update streaming message content
-function updateStreamingMessage() {
-  const session = getCurrentSession();
-  if (!session) return;
-  
-  const idx = session.messages.findIndex(m => m.id === state.currentStreamingId);
-  if (idx !== -1) {
-    session.messages[idx].content = state.currentStreamingContent;
-    session.updatedAt = Date.now();
-    renderMessages();
-    scrollToBottom();
-  }
-}
+// Update streaming message content - kept for reference but not used
+// Content is now updated directly in the stream handler
 
 // Finalize streaming message
 function finalizeStreamingMessage() {
@@ -437,7 +558,7 @@ function scrollToBottom() {
 
 // Generate unique ID
 function generateId() {
-  return 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  return 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
 }
 
 // Render the app
@@ -471,9 +592,24 @@ function render() {
         <div class="chat-header">
           <h1>AI Legal Advisor</h1>
           <div class="header-controls">
-            <select class="model-select" ${state.isLoading ? 'disabled' : ''}>
-              ${CONFIG.MODELS.map(m => `<option value="${m.value}" ${state.selectedModel === m.value ? 'selected' : ''}>${m.label}</option>`).join('')}
-            </select>
+            <label class="control-label">
+              Model
+              <select class="model-select" ${state.isLoading ? 'disabled' : ''}>
+                ${CONFIG.MODELS.map(m => `<option value="${m.value}" ${state.selectedModel === m.value ? 'selected' : ''}>${m.label}</option>`).join('')}
+              </select>
+            </label>
+            <label class="control-label">
+              Thinking
+              <select class="thinking-select" ${state.isLoading ? 'disabled' : ''}>
+                ${CONFIG.THINKING_OPTIONS.map(t => `<option value="${t.value}" ${state.thinkingEnabled === t.value ? 'selected' : ''}>${t.label}</option>`).join('')}
+              </select>
+            </label>
+            <label class="control-label">
+              Effort
+              <select class="reasoning-select" ${state.isLoading ? 'disabled' : ''}>
+                ${CONFIG.REASONING_EFFORT.map(r => `<option value="${r.value}" ${state.reasoningEffort === r.value ? 'selected' : ''}>${r.label}</option>`).join('')}
+              </select>
+            </label>
           </div>
         </div>
         <div class="message-list"></div>
@@ -519,11 +655,46 @@ function renderMessages() {
     }).join('');
   }
 
-  elements.messageList.innerHTML = messages.map(msg => `
-    <div class="message message-${msg.role}">
-      ${escapeHtml(msg.content)}
-    </div>
-  `).join('');
+  elements.messageList.innerHTML = messages.map(msg => {
+    const renderedContent = window.marked ? window.marked.parse(msg.content || '') : escapeHtml(msg.content);
+    let thinkingSection = '';
+    
+    // Show thinking content section only for assistant messages when thinking mode is enabled
+    const sessionThinkingEnabled = session ? session.thinkingEnabled : state.thinkingEnabled;
+    if (msg.role === 'assistant' && sessionThinkingEnabled) {
+      const reasoningContent = msg.reasoningContent || '';
+      const escapedThinking = escapeHtml(reasoningContent);
+      thinkingSection = `
+        <div class="reasoning-section">
+          <div class="reasoning-header" onclick="toggleReasoning(this)">
+            <span class="reasoning-toggle">▶</span>
+            <span>思考过程</span>
+          </div>
+          <div class="reasoning-content">${escapedThinking}</div>
+        </div>
+      `;
+    }
+    
+    return `
+      <div class="message message-${msg.role}">
+        ${thinkingSection}
+        <div class="message-content">${renderedContent}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Toggle reasoning section visibility
+function toggleReasoning(headerEl) {
+  const contentEl = headerEl.nextElementSibling;
+  const toggleEl = headerEl.querySelector('.reasoning-toggle');
+  if (contentEl.style.display === 'none') {
+    contentEl.style.display = 'block';
+    toggleEl.style.transform = 'rotate(90deg)';
+  } else {
+    contentEl.style.display = 'none';
+    toggleEl.style.transform = 'rotate(0deg)';
+  }
 }
 
 // Escape HTML to prevent XSS

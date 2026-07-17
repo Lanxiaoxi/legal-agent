@@ -1,0 +1,602 @@
+INFO:httpx:HTTP Request: POST https://api.deepseek.com/chat/completions "HTTP/1.1 200 OK"
+INFO:__main__:Delta keys: ['role', 'content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '好的...'
+INFO:__main__:Reasoning content received: 好的...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '，...'
+INFO:__main__:Reasoning content received: ，...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '用户...'
+INFO:__main__:Reasoning content received: 用户...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '发...'
+INFO:__main__:Reasoning content received: 发...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '来...'
+INFO:__main__:Reasoning content received: 来...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '一个...'
+INFO:__main__:Reasoning content received: 一个...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '简单的...'
+INFO:__main__:Reasoning content received: 简单的...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '问候...'
+INFO:__main__:Reasoning content received: 问候...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '“...'
+INFO:__main__:Reasoning content received: “...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '你好...'
+INFO:__main__:Reasoning content received: 你好...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '”。...'
+INFO:__main__:Reasoning content received: ”。...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '这是一个...'
+INFO:__main__:Reasoning content received: 这是一个...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '非常...'
+INFO:__main__:Reasoning content received: 非常...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '基础的...'
+INFO:__main__:Reasoning content received: 基础的...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '社交...'
+INFO:__main__:Reasoning content received: 社交...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '开场...'
+INFO:__main__:Reasoning content received: 开场...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '，...'
+INFO:__main__:Reasoning content received: ，...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '没有...'
+INFO:__main__:Reasoning content received: 没有...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '具体的...'
+INFO:__main__:Reasoning content received: 具体的...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '法律...'
+INFO:__main__:Reasoning content received: 法律...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '问题...'
+INFO:__main__:Reasoning content received: 问题...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '或...'
+INFO:__main__:Reasoning content received: 或...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '咨询...'
+INFO:__main__:Reasoning content received: 咨询...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '需求...'
+INFO:__main__:Reasoning content received: 需求...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '。...'
+INFO:__main__:Reasoning content received: 。...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '可能...'
+INFO:__main__:Reasoning content received: 可能...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '用户...'
+INFO:__main__:Reasoning content received: 用户...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '只是想...'
+INFO:__main__:Reasoning content received: 只是想...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '测试...'
+INFO:__main__:Reasoning content received: 测试...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '我在...'
+INFO:__main__:Reasoning content received: 我在...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '不在...'
+INFO:__main__:Reasoning content received: 不在...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '，...'
+INFO:__main__:Reasoning content received: ，...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '或者...'
+INFO:__main__:Reasoning content received: 或者...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '准备...'
+INFO:__main__:Reasoning content received: 准备...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '后续...'
+INFO:__main__:Reasoning content received: 后续...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '提问...'
+INFO:__main__:Reasoning content received: 提问...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '。
+
+...'
+INFO:__main__:Reasoning content received: 。
+
+...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '我需要...'
+INFO:__main__:Reasoning content received: 我需要...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '先...'
+INFO:__main__:Reasoning content received: 先...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '友好...'
+INFO:__main__:Reasoning content received: 友好...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '地...'
+INFO:__main__:Reasoning content received: 地...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '回应...'
+INFO:__main__:Reasoning content received: 回应...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '问候...'
+INFO:__main__:Reasoning content received: 问候...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '，...'
+INFO:__main__:Reasoning content received: ，...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '建立...'
+INFO:__main__:Reasoning content received: 建立...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '轻松的...'
+INFO:__main__:Reasoning content received: 轻松的...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '对话...'
+INFO:__main__:Reasoning content received: 对话...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '氛围...'
+INFO:__main__:Reasoning content received: 氛围...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '。...'
+INFO:__main__:Reasoning content received: 。...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '同时...'
+INFO:__main__:Reasoning content received: 同时...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '，...'
+INFO:__main__:Reasoning content received: ，...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '考虑到...'
+INFO:__main__:Reasoning content received: 考虑到...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '我的...'
+INFO:__main__:Reasoning content received: 我的...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '角色...'
+INFO:__main__:Reasoning content received: 角色...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '定位...'
+INFO:__main__:Reasoning content received: 定位...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '是...'
+INFO:__main__:Reasoning content received: 是...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '法律...'
+INFO:__main__:Reasoning content received: 法律...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '顾问...'
+INFO:__main__:Reasoning content received: 顾问...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '助手...'
+INFO:__main__:Reasoning content received: 助手...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '，...'
+INFO:__main__:Reasoning content received: ，...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '可以在...'
+INFO:__main__:Reasoning content received: 可以在...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '回复...'
+INFO:__main__:Reasoning content received: 回复...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '中...'
+INFO:__main__:Reasoning content received: 中...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '暗示...'
+INFO:__main__:Reasoning content received: 暗示...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '我已经...'
+INFO:__main__:Reasoning content received: 我已经...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '准备好...'
+INFO:__main__:Reasoning content received: 准备好...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '提供...'
+INFO:__main__:Reasoning content received: 提供...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '专业...'
+INFO:__main__:Reasoning content received: 专业...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '服务...'
+INFO:__main__:Reasoning content received: 服务...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '，...'
+INFO:__main__:Reasoning content received: ，...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '并...'
+INFO:__main__:Reasoning content received: 并...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '再次...'
+INFO:__main__:Reasoning content received: 再次...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '强调...'
+INFO:__main__:Reasoning content received: 强调...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '我的...'
+INFO:__main__:Reasoning content received: 我的...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '角色...'
+INFO:__main__:Reasoning content received: 角色...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '边界...'
+INFO:__main__:Reasoning content received: 边界...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '不是...'
+INFO:__main__:Reasoning content received: 不是...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '正式...'
+INFO:__main__:Reasoning content received: 正式...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '法律...'
+INFO:__main__:Reasoning content received: 法律...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '意见...'
+INFO:__main__:Reasoning content received: 意见...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '，...'
+INFO:__main__:Reasoning content received: ，...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '这样...'
+INFO:__main__:Reasoning content received: 这样...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '既...'
+INFO:__main__:Reasoning content received: 既...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '专业...'
+INFO:__main__:Reasoning content received: 专业...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '又...'
+INFO:__main__:Reasoning content received: 又...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '安全...'
+INFO:__main__:Reasoning content received: 安全...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '。
+
+...'
+INFO:__main__:Reasoning content received: 。
+
+...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '嗯...'
+INFO:__main__:Reasoning content received: 嗯...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '，...'
+INFO:__main__:Reasoning content received: ，...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '回复...'
+INFO:__main__:Reasoning content received: 回复...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '可以...'
+INFO:__main__:Reasoning content received: 可以...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '简洁...'
+INFO:__main__:Reasoning content received: 简洁...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '些...'
+INFO:__main__:Reasoning content received: 些...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '，...'
+INFO:__main__:Reasoning content received: ，...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '先...'
+INFO:__main__:Reasoning content received: 先...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '热情...'
+INFO:__main__:Reasoning content received: 热情...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '问候...'
+INFO:__main__:Reasoning content received: 问候...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '，...'
+INFO:__main__:Reasoning content received: ，...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '然后...'
+INFO:__main__:Reasoning content received: 然后...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '明确...'
+INFO:__main__:Reasoning content received: 明确...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '表示...'
+INFO:__main__:Reasoning content received: 表示...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '愿意...'
+INFO:__main__:Reasoning content received: 愿意...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '提供...'
+INFO:__main__:Reasoning content received: 提供...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '法律...'
+INFO:__main__:Reasoning content received: 法律...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '信息...'
+INFO:__main__:Reasoning content received: 信息...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '参考...'
+INFO:__main__:Reasoning content received: 参考...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '，...'
+INFO:__main__:Reasoning content received: ，...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '但...'
+INFO:__main__:Reasoning content received: 但...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '需...'
+INFO:__main__:Reasoning content received: 需...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '律师...'
+INFO:__main__:Reasoning content received: 律师...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '确认...'
+INFO:__main__:Reasoning content received: 确认...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '。...'
+INFO:__main__:Reasoning content received: 。...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '就这样...'
+INFO:__main__:Reasoning content received: 就这样...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '回应...'
+INFO:__main__:Reasoning content received: 回应...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '吧...'
+INFO:__main__:Reasoning content received: 吧...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '。...'
+INFO:__main__:Reasoning content received: 。...
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '你好...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '！...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '我是...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '你的...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '法律...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '顾问...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '助手...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '，...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '很高兴...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '为你...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '服务...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '。...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '如果你...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '有任何...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '法律...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '相关的...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '疑问...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '或...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '需要...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '信息...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '参考...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '，...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '请...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '随时...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '告诉我...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '。...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '请注意...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '，...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '我的...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '回答...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '仅供...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '一般...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '性...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '参考...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '，...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '不能...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '替代...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '专业...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '律师...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '的意见...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '。...'
+INFO:__main__:Reasoning content: '...'
+INFO:__main__:Delta keys: ['content', 'reasoning_content']
+INFO:__main__:Content: '...'
+INFO:__main__:Reasoning content: '...'

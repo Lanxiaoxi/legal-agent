@@ -75,6 +75,9 @@ class ChatRequest:
 # Valid models
 VALID_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"]
 
+# Reasoning effort options
+REASONING_EFFORT_OPTIONS = ["high", "max"]
+
 
 def validate_chat_request(data: dict) -> tuple[bool, Optional[str]]:
     """Validate chat request data"""
@@ -95,6 +98,11 @@ def validate_chat_request(data: dict) -> tuple[bool, Optional[str]]:
     if model and model not in VALID_MODELS:
         return False, f"Invalid model. Valid models: {', '.join(VALID_MODELS)}"
     
+    # Validate reasoning_effort if provided
+    reasoning_effort = data.get("reasoning_effort")
+    if reasoning_effort and reasoning_effort not in REASONING_EFFORT_OPTIONS:
+        return False, f"Invalid reasoning_effort. Valid options: {', '.join(REASONING_EFFORT_OPTIONS)}"
+    
     return True, None
 
 
@@ -103,7 +111,8 @@ def limit_history(messages: list, max_count: int = 20) -> list:
     return messages[-max_count:] if messages else []
 
 
-async def stream_chat_response(message: str, history: list, model: str = None) -> StreamingResponse:
+async def stream_chat_response(message: str, history: list, model: str = None, 
+                             thinking: bool = True, reasoning_effort: str = "high") -> StreamingResponse:
     """Stream chat response from DeepSeek API"""
     
     # Build messages array with system prompt
@@ -119,23 +128,32 @@ async def stream_chat_response(message: str, history: list, model: str = None) -
     # Add current message
     messages.append({"role": "user", "content": message})
     
-    # Prepare request to DeepSeek
-    url = f"{CONFIG['deepseekBaseUrl']}/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {CONFIG['deepseekApiKey']}",
-        "Content-Type": "application/json"
-    }
     # Use user-selected model or fall back to config default
     selected_model = model or CONFIG["model"]
     
-    payload = {
-        "model": selected_model,
-        "messages": messages,
-        "stream": True
-    }
+    # Prepare extra body for thinking mode
+    extra_body = {}
+    if thinking:
+        extra_body["thinking"] = {"type": "enabled"}
     
     async def generate():
         try:
+            # Use httpx for streaming
+            url = f"{CONFIG['deepseekBaseUrl']}/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {CONFIG['deepseekApiKey']}",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+            
+            payload = {
+                "model": selected_model,
+                "messages": messages,
+                "reasoning_effort": reasoning_effort if thinking else "low",
+                "stream": True,
+                "extra_body": extra_body
+            }
+            
             async with httpx.AsyncClient(timeout=CONFIG["requestTimeout"]) as client:
                 async with client.stream("POST", url, json=payload, headers=headers) as response:
                     if response.status_code == 401:
@@ -149,18 +167,24 @@ async def stream_chat_response(message: str, history: list, model: str = None) -
                     async for line in response.aiter_lines():
                         if line.startswith("data: "):
                             data = line[6:]  # Remove "data: " prefix
-                            # Transform DeepSeek format to our format
                             if data == "[DONE]":
-                                yield 'data: {"content": "", "done": true}\n\n'
+                                yield 'data: {"content": "", "reasoning_content": "", "done": true}\n\n'
                             else:
                                 try:
                                     chunk = json.loads(data)
                                     if "choices" in chunk and len(chunk["choices"]) > 0:
                                         delta = chunk["choices"][0].get("delta", {})
-                                        content = delta.get("content", "")
+                                        content = delta.get("content") or ""
+                                        reasoning_content = delta.get("reasoning_content") or ""
                                         finish_reason = chunk["choices"][0].get("finish_reason")
                                         done = finish_reason == "stop"
-                                        yield f'data: {{"content": {json.dumps(content)}, "done": {str(done).lower()}}}\n\n'
+                                        
+                                        # Log for debugging
+                                        if reasoning_content:
+                                            logger.info(f"Reasoning content received: {reasoning_content[:100]}...")
+                                        
+                                        # Always output both content and reasoning_content if they have values
+                                        yield f'data: {{"content": {json.dumps(content)}, "reasoning_content": {json.dumps(reasoning_content)}, "done": {str(done).lower()}}}\n\n'
                                 except json.JSONDecodeError:
                                     pass
         except httpx.TimeoutException:
@@ -194,9 +218,11 @@ async def chat(request: Request):
     message = data["message"]
     history = data.get("history", [])
     model = data.get("model")  # User-selected model
+    thinking = data.get("thinking", True)  # Enable thinking by default
+    reasoning_effort = data.get("reasoning_effort", "high")  # Default to high reasoning
     
     # Stream response
-    return await stream_chat_response(message, history, model)
+    return await stream_chat_response(message, history, model, thinking, reasoning_effort)
 
 
 @app.options("/api/chat")

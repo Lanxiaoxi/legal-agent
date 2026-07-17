@@ -9,12 +9,20 @@
 - 💾 多会话支持 - 创建、切换、删除多个对话
 - 📝 持久化存储 - 自动保存会话到 localStorage
 - 🔄 模型选择 - 支持选择不同的 DeepSeek 模型
+- 🧠 深度思考 - 可开启 DeepSeek 推理过程
 - 🔄 重试机制 - 网络错误时自动重试
 
 ## 支持的模型
 
 - DeepSeek V4 Flash
 - DeepSeek V4 Pro
+- DeepSeek Chat
+- DeepSeek Reasoner
+
+## 思考模式
+
+- **思考开关** - 可开启/关闭 AI 思考过程显示
+- **思考强度** - High / Max 两档选择
 
 ## 快速开始
 
