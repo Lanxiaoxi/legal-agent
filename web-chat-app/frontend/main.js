@@ -3,7 +3,7 @@ const CONFIG = {
   API_URL: '/api/chat',
   MAX_MESSAGE_LENGTH: 5000,
   MAX_HISTORY_MESSAGES: 100,
-  STORAGE_KEY: 'chat_history',
+  STORAGE_KEY: 'chat_sessions',
   MAX_RETRIES: 3,
   LOADING_DELAY: 200,
   OPTIMISTIC_UPDATE_DELAY: 100,
@@ -15,7 +15,8 @@ const CONFIG = {
 
 // State
 let state = {
-  messages: [],
+  sessions: {},           // { sessionId: { id, title, messages: [], createdAt, updatedAt, model } }
+  currentSessionId: null,
   isLoading: false,
   error: null,
   retryCount: 0,
@@ -23,8 +24,14 @@ let state = {
   isStreaming: false,
   currentStreamingContent: '',
   currentStreamingId: null,
-  selectedModel: CONFIG.MODELS[0].value
+  selectedModel: CONFIG.MODELS[0].value,
+  hasSession: true        // Track if there is an active session
 };
+
+// Current session convenience getter
+function getCurrentSession() {
+  return state.currentSessionId ? state.sessions[state.currentSessionId] : null;
+}
 
 // DOM Elements
 const elements = {};
@@ -36,30 +43,114 @@ function init() {
   setupEventListeners();
 }
 
-// Load conversation history from sessionStorage
+// Load all sessions from localStorage
 function loadHistory() {
   try {
-    const stored = sessionStorage.getItem(CONFIG.STORAGE_KEY);
+    const stored = localStorage.getItem(CONFIG.STORAGE_KEY);
     if (stored) {
-      state.messages = JSON.parse(stored);
-      renderMessages();
+      const data = JSON.parse(stored);
+      state.sessions = data.sessions || {};
+      state.currentSessionId = data.currentSessionId || null;
+      state.hasSession = Object.keys(state.sessions).length > 0;
+      
+      // If no sessions, create a default one
+      if (Object.keys(state.sessions).length === 0) {
+        createNewSession();
+      }
+    } else {
+      createNewSession();
     }
+    renderMessages();
   } catch (e) {
-    console.error('Failed to load history:', e);
-    state.messages = [];
+    console.error('Failed to load sessions:', e);
+    state.sessions = {};
+    state.hasSession = false;
+    createNewSession();
   }
 }
 
-// Save conversation history to sessionStorage
+// Save all sessions to localStorage
 function saveHistory() {
   try {
-    // Limit to MAX_HISTORY_MESSAGES
-    if (state.messages.length > CONFIG.MAX_HISTORY_MESSAGES) {
-      state.messages = state.messages.slice(-CONFIG.MAX_HISTORY_MESSAGES);
+    // Limit each session's messages
+    for (const sessionId in state.sessions) {
+      const session = state.sessions[sessionId];
+      if (session.messages.length > CONFIG.MAX_HISTORY_MESSAGES) {
+        session.messages = session.messages.slice(-CONFIG.MAX_HISTORY_MESSAGES);
+      }
     }
-    sessionStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(state.messages));
+    
+    localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify({
+      sessions: state.sessions,
+      currentSessionId: state.currentSessionId
+    }));
   } catch (e) {
-    console.error('Failed to save history:', e);
+    console.error('Failed to save sessions:', e);
+  }
+}
+
+// Create a new session
+function createNewSession() {
+  const sessionId = generateId();
+  state.sessions[sessionId] = {
+    id: sessionId,
+    title: 'New Conversation',
+    messages: [],
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    model: state.selectedModel
+  };
+  state.currentSessionId = sessionId;
+  state.hasSession = true;
+  saveHistory();
+  return sessionId;
+}
+
+// Switch to a different session
+function switchSession(sessionId) {
+  if (state.sessions[sessionId]) {
+    state.currentSessionId = sessionId;
+    state.selectedModel = state.sessions[sessionId].model || CONFIG.MODELS[0].value;
+    state.error = null;
+    saveHistory();
+    render();
+    scrollToBottom();
+  }
+}
+
+// Delete a session
+function deleteSession(sessionId) {
+  const wasCurrentSession = state.currentSessionId === sessionId;
+  
+  delete state.sessions[sessionId];
+  
+  // If no sessions left, switch to empty state (user creates new manually)
+  if (Object.keys(state.sessions).length === 0) {
+    state.currentSessionId = null;
+    state.hasSession = false;
+  } else if (wasCurrentSession) {
+    // If deleted current session, switch to another
+    const remainingIds = Object.keys(state.sessions);
+    state.currentSessionId = remainingIds[0];
+    state.selectedModel = state.sessions[remainingIds[0]].model || CONFIG.MODELS[0].value;
+  }
+  
+  saveHistory();
+  render();
+}
+
+// Update session title based on first message
+function updateSessionTitle(sessionId, firstMessage) {
+  const session = state.sessions[sessionId];
+  if (session && session.title === 'New Conversation') {
+    // Use first 30 characters of first user message as title
+    let title = firstMessage.trim().substring(0, 30);
+    if (firstMessage.trim().length > 30) {
+      title += '...';
+    }
+    session.title = title || 'New Conversation';
+    session.updatedAt = Date.now();
+    saveHistory();
   }
 }
 
@@ -78,6 +169,16 @@ function handleClick(e) {
     clearConversation();
   } else if (e.target.classList.contains('retry-btn')) {
     retryMessage();
+  } else if (e.target.classList.contains('new-session-btn')) {
+    createNewSession();
+    render();
+    if (elements.input) elements.input.focus();
+  } else if (e.target.classList.contains('session-item')) {
+    const sessionId = e.target.dataset.sessionId;
+    switchSession(sessionId);
+  } else if (e.target.classList.contains('delete-session-btn')) {
+    const sessionId = e.target.closest('.session-item').dataset.sessionId;
+    deleteSession(sessionId);
   }
 }
 
@@ -109,7 +210,10 @@ function validateInput(text) {
 // Send message
 async function sendMessage() {
   const input = elements.input;
-  if (!input) return;
+  if (!input || !state.hasSession) return;
+
+  const session = getCurrentSession();
+  if (!session) return;
 
   const message = input.value;
   const validation = validateInput(message);
@@ -123,6 +227,9 @@ async function sendMessage() {
   setLoading(true);
   input.disabled = true;
 
+  // Update session model
+  session.model = state.selectedModel;
+
   // Create user message
   const userMessage = {
     id: generateId(),
@@ -131,11 +238,14 @@ async function sendMessage() {
     timestamp: Date.now()
   };
 
-  // Add user message immediately
-  state.messages.push(userMessage);
+  // Add user message to current session
+  session.messages.push(userMessage);
   saveHistory();
   renderMessages();
   scrollToBottom();
+
+  // Update session title if this is the first message
+  updateSessionTitle(session.id, message);
 
   // Clear input
   input.value = '';
@@ -149,7 +259,7 @@ async function sendMessage() {
   };
 
   // Add AI message placeholder after user message
-  state.messages.push(aiMessage);
+  session.messages.push(aiMessage);
   state.currentStreamingId = aiMessage.id;
   state.currentStreamingContent = '';
   state.isStreaming = true;
@@ -157,7 +267,7 @@ async function sendMessage() {
   scrollToBottom();
 
   try {
-    const history = state.messages
+    const history = session.messages
       .filter(m => m.id !== state.currentStreamingId)
       .slice(-20)
       .map(m => ({ role: m.role, content: m.content }));
@@ -216,9 +326,13 @@ async function sendMessage() {
 
 // Update streaming message content
 function updateStreamingMessage() {
-  const idx = state.messages.findIndex(m => m.id === state.currentStreamingId);
+  const session = getCurrentSession();
+  if (!session) return;
+  
+  const idx = session.messages.findIndex(m => m.id === state.currentStreamingId);
   if (idx !== -1) {
-    state.messages[idx].content = state.currentStreamingContent;
+    session.messages[idx].content = state.currentStreamingContent;
+    session.updatedAt = Date.now();
     renderMessages();
     scrollToBottom();
   }
@@ -226,23 +340,30 @@ function updateStreamingMessage() {
 
 // Finalize streaming message
 function finalizeStreamingMessage() {
+  const session = getCurrentSession();
+  if (session) {
+    session.updatedAt = Date.now();
+  }
   saveHistory();
   renderMessages();
 }
 
 // Retry failed message
 async function retryMessage() {
+  const session = getCurrentSession();
+  if (!session) return;
+  
   if (state.retryCount >= CONFIG.MAX_RETRIES) {
     setError('Maximum retry attempts exceeded. Please refresh the page.');
     return;
   }
 
   state.retryCount++;
-  const lastUserMessage = state.messages.filter(m => m.role === 'user').pop();
+  const lastUserMessage = session.messages.filter(m => m.role === 'user').pop();
   
   if (lastUserMessage) {
     // Remove the failed AI response
-    state.messages = state.messages.filter(m => m.role === 'user');
+    session.messages = session.messages.filter(m => m.role === 'user');
     elements.input.value = state.preservedInput || lastUserMessage.content;
     state.preservedInput = '';
     setError(null);
@@ -252,8 +373,11 @@ async function retryMessage() {
 
 // Handle errors
 function handleError(error) {
-  // Remove failed AI message
-  state.messages = state.messages.filter(m => m.id !== state.currentStreamingId);
+  const session = getCurrentSession();
+  if (session) {
+    // Remove failed AI message
+    session.messages = session.messages.filter(m => m.id !== state.currentStreamingId);
+  }
   
   const errorMsg = error.message || 'Failed to send message';
   setError(errorMsg);
@@ -285,13 +409,18 @@ function setLoading(loading) {
   }
 }
 
-// Clear conversation
+// Clear conversation (current session only)
 function clearConversation() {
-  state.messages = [];
+  const session = getCurrentSession();
+  if (session) {
+    session.messages = [];
+    session.title = 'New Conversation';
+    session.updatedAt = Date.now();
+  }
   state.error = null;
   state.retryCount = 0;
   state.preservedInput = '';
-  sessionStorage.removeItem(CONFIG.STORAGE_KEY);
+  saveHistory();
   render();
   if (elements.input) {
     elements.input.focus();
@@ -316,26 +445,49 @@ function render() {
   const app = document.getElementById('app');
   if (!app) return;
 
+  const session = getCurrentSession();
+  const sessionIds = Object.keys(state.sessions);
+
   app.innerHTML = `
-    <div class="chat-container">
-      <div class="chat-header">
-        <h1>AI Legal Advisor</h1>
-        <div class="header-controls">
-          <select class="model-select" ${state.isLoading ? 'disabled' : ''}>
-            ${CONFIG.MODELS.map(m => `<option value="${m.value}" ${state.selectedModel === m.value ? 'selected' : ''}>${m.label}</option>`).join('')}
-          </select>
-          <button class="clear-btn">Clear Conversation</button>
+    <div class="app-container">
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <button class="new-session-btn">+ New Chat</button>
+        </div>
+        <div class="session-list">
+          ${sessionIds.map(id => {
+            const s = state.sessions[id];
+            const isActive = id === state.currentSessionId;
+            return `
+              <div class="session-item ${isActive ? 'active' : ''}" data-session-id="${id}">
+                <span class="session-title">${escapeHtml(s.title)}</span>
+                <button class="delete-session-btn" title="Delete session">×</button>
+              </div>
+            `;
+          }).join('')}
         </div>
       </div>
-      <div class="message-list"></div>
-      ${state.isLoading ? '<div class="loading-indicator">Thinking...</div>' : ''}
-      ${state.error ? `<div class="error-message">${escapeHtml(state.error)}</div>` : ''}
-      <div class="input-container">
-        <input type="text" placeholder="Ask a legal question..." maxlength="${CONFIG.MAX_MESSAGE_LENGTH}" ${state.isLoading ? 'disabled' : ''}>
-        <button class="send-btn" ${state.isLoading ? 'disabled' : ''}>Send</button>
+      <div class="chat-container">
+        <div class="chat-header">
+          <h1>AI Legal Advisor</h1>
+          <div class="header-controls">
+            <select class="model-select" ${state.isLoading ? 'disabled' : ''}>
+              ${CONFIG.MODELS.map(m => `<option value="${m.value}" ${state.selectedModel === m.value ? 'selected' : ''}>${m.label}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="message-list"></div>
+        ${state.isLoading ? '<div class="loading-indicator">Thinking...</div>' : ''}
+        ${state.error ? `<div class="error-message">${escapeHtml(state.error)}</div>` : ''}
+        <div class="input-container">
+          <input type="text" placeholder="Ask a legal question..." maxlength="${CONFIG.MAX_MESSAGE_LENGTH}" ${state.isLoading || !state.hasSession ? 'disabled' : ''}>
+          <button class="send-btn" ${state.isLoading || !state.hasSession ? 'disabled' : ''}>Send</button>
+        </div>
+        ${!state.hasSession ? '<div class="no-session-message">No session available. Click "+ New Chat" to start a new conversation.</div>' : ''}
+        ${state.retryCount > 0 && state.error ? '<div style="padding: 0 20px 16px;"><button class="retry-btn">Retry</button></div>' : ''}
       </div>
-      ${state.retryCount > 0 && state.error ? '<div style="padding: 0 20px 16px;"><button class="retry-btn">Retry</button></div>' : ''}
-    `;
+    </div>
+  `;
 
   // Cache DOM elements
   elements.input = document.querySelector('.input-container input');
@@ -348,7 +500,26 @@ function render() {
 function renderMessages() {
   if (!elements.messageList) return;
 
-  elements.messageList.innerHTML = state.messages.map(msg => `
+  const session = getCurrentSession();
+  const messages = session ? session.messages : [];
+  
+  // Also render sidebar sessions if it exists
+  const sessionListEl = document.querySelector('.session-list');
+  if (sessionListEl) {
+    const sessionIds = Object.keys(state.sessions);
+    sessionListEl.innerHTML = sessionIds.map(id => {
+      const s = state.sessions[id];
+      const isActive = id === state.currentSessionId;
+      return `
+        <div class="session-item ${isActive ? 'active' : ''}" data-session-id="${id}">
+          <span class="session-title">${escapeHtml(s.title)}</span>
+          <button class="delete-session-btn" title="Delete session">×</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  elements.messageList.innerHTML = messages.map(msg => `
     <div class="message message-${msg.role}">
       ${escapeHtml(msg.content)}
     </div>
