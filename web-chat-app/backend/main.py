@@ -131,11 +131,6 @@ async def stream_chat_response(message: str, history: list, model: str = None,
     # Use user-selected model or fall back to config default
     selected_model = model or CONFIG["model"]
     
-    # Prepare extra body for thinking mode
-    extra_body = {}
-    if thinking:
-        extra_body["thinking"] = {"type": "enabled"}
-    
     async def generate():
         try:
             # Use httpx for streaming
@@ -146,13 +141,19 @@ async def stream_chat_response(message: str, history: list, model: str = None,
                 "Accept": "application/json"
             }
             
+            # Build payload - only include thinking when enabled
             payload = {
                 "model": selected_model,
                 "messages": messages,
-                "reasoning_effort": reasoning_effort if thinking else "low",
                 "stream": True,
-                "extra_body": extra_body
             }
+            
+            # Only add thinking-related params when enabled
+            if thinking:
+                payload["reasoning_effort"] = reasoning_effort
+                payload["extra_body"] = {"thinking": {"type": "enabled"}}
+            else:
+                payload["reasoning_effort"] = "low"
             
             async with httpx.AsyncClient(timeout=CONFIG["requestTimeout"]) as client:
                 async with client.stream("POST", url, json=payload, headers=headers) as response:

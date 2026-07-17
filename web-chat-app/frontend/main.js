@@ -415,8 +415,8 @@ async function sendMessage() {
               scrollToBottom();
             }
             
-            // Update reasoning content
-            if (data.reasoning_content !== undefined && data.reasoning_content !== null) {
+            // Update reasoning content - only when thinking mode is enabled
+            if (state.thinkingEnabled && data.reasoning_content !== undefined && data.reasoning_content !== null) {
               const session = getCurrentSession();
               if (session) {
                 const idx = session.messages.findIndex(m => m.id === state.currentStreamingId);
@@ -640,7 +640,8 @@ function render() {
           </div>
         </div>
         <div class="message-list"></div>
-        ${state.isLoading ? '<div class="loading-indicator">Thinking...</div>' : ''}
+        ${state.isStreaming ? '<div class="loading-indicator">Generating...</div>' : ''}
+        ${!state.isStreaming && state.isLoading ? '<div class="loading-indicator">Thinking...</div>' : ''}
         ${state.error ? `<div class="error-message">${escapeHtml(state.error)}</div>` : ''}
         <div class="input-container">
           <input type="text" placeholder="Ask a legal question..." maxlength="${CONFIG.MAX_MESSAGE_LENGTH}" ${state.isLoading || !state.hasSession ? 'disabled' : ''}>
