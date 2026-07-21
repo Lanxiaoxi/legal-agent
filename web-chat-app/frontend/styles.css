@@ -196,8 +196,8 @@ body {
 
 .message-user {
   align-self: flex-end;
-  background: #007AFF;
-  color: white;
+  background: #e3f2fd;
+  color: #333;
   border-bottom-right-radius: 4px;
 }
 

@@ -8,6 +8,7 @@ dependencies = [
     "uvicorn[standard]>=0.23.0",
     "httpx>=0.24.0",
     "openai-agents>=0.18.3",
+    "beautifulsoup4>=4.12.0",
 ]
 
 [project.optional-dependencies]
