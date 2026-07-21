@@ -4,14 +4,16 @@
 
 ## 功能特性
 
-- 🤖 AI 法律助手 - 回答常见法律问题，基于法律知识库
-- 💬 流式响应 - 即时获取 AI 回复
-- 💾 多会话支持 - 创建、切换、删除多个对话
-- 📝 持久化存储 - 自动保存会话到 localStorage
-- 🔄 模型选择 - 支持选择不同的 DeepSeek 模型
-- 🧠 深度思考 - 可开启 DeepSeek 推理过程
-- 🔄 重试机制 - 网络错误时自动重试
-- 🔍 法律工具 - 内置法律条文查询、网络搜索功能
+- 🤖 **AI 法律助手** - 回答常见法律问题，基于法律知识库
+- 💬 **流式响应** - SSE 实时流式输出，即时获取 AI 回复
+- 💾 **多会话支持** - 创建、切换、删除多个对话，会话自动保存到 localStorage
+- � **Markdown 支持** - AI 回复内容支持 Markdown 渲染
+- �🔄 **模型选择** - 支持 DeepSeek V4 Flash / V4 Pro / Chat / Reasoner
+- 🧠 **深度思考** - 可开启/关闭 DeepSeek 推理过程显示
+- ⚡ **思考强度** - Low / High / Max 三档推理深度选择
+- 🔄 **重试机制** - 网络错误时自动保留输入，支持手动重试
+- 🔍 **法律工具** - 内置法律条文查询、关键词搜索、网络搜索功能
+- 📱 **响应式设计** - 简洁美观的 UI，支持多种屏幕尺寸
 
 ## 支持的模型
 
@@ -22,8 +24,35 @@
 
 ## 思考模式
 
-- **思考开关** - 可开启/关闭 AI 思考过程显示
-- **思考强度** - Low / High / Max 三档选择
+- **Thinking 开关** - 可开启/关闭 AI 思考过程显示
+- **Effort 强度** - Low / High / Max 三档选择，控制推理深度
+
+## 项目架构
+
+```
+web-chat-app/
+├── backend/
+│   ├── main.py          # FastAPI 主应用入口
+│   ├── agent.py         # OpenAI Agents SDK Agent 定义
+│   ├── config.py        # 配置管理（环境变量 + config.json）
+│   ├── config.json      # 配置文件
+│   ├── tools.py         # 法律工具函数
+│   └── routes/
+│       └── chat.py      # 聊天 API 路由（SSE 流式响应）
+├── frontend/
+│   ├── index.html       # 主页面
+│   ├── main.js          # 前端逻辑（原生 JavaScript）
+│   └── styles.css       # 样式
+├── proxy.py             # 开发代理服务
+└── pyproject.toml       # 项目配置
+```
+
+### 技术栈
+
+- **前端**: 原生 JavaScript (无框架依赖), CSS, HTML
+- **后端**: FastAPI (Python async)
+- **AI 框架**: OpenAI Agents SDK
+- **LLM API**: DeepSeek API
 
 ## 快速开始
 
@@ -34,7 +63,7 @@
 
 ### 安装配置
 
-1. 克隆项目并进入目录：
+1. 进入项目目录：
    ```bash
    cd web-chat-app
    ```
@@ -102,22 +131,24 @@
 | requestTimeout | REQUEST_TIMEOUT | 30 | 请求超时（秒） |
 | maxHistoryMessages | MAX_HISTORY_MESSAGES | 20 | 最大历史消息数 |
 | port | PORT | 8000 | 后端端口 |
-| tavilyApiKey | TAVILY_API_KEY | - | Tavily 搜索 API 密钥（可选，用于网络搜索功能） |
+| tavilyApiKey | TAVILY_API_KEY | - | Tavily 搜索 API 密钥（可选） |
 
-## 项目结构
+## 法律工具
 
-```
-web-chat-app/
-├── backend/
-│   ├── main.py        # FastAPI 后端
-│   └── config.json    # 配置文件
-├── frontend/
-│   ├── index.html     # 主页面
-│   ├── main.js        # 前端逻辑
-│   └── styles.css     # 样式
-├── proxy.py           # 代理服务
-└── pyproject.toml     # 项目配置
-```
+应用内置以下工具，AI 会根据问题自动调用：
+
+- **get_legal_reference** - 查询指定类型的法律条文（合同法、物权法、民法典、劳动法、刑法）
+- **search_legal_keyword** - 根据关键词搜索相关法律条文（违约金、侵权、租赁、离婚、继承、债务等）
+- **web_search** - 使用 Tavily 搜索互联网获取最新信息
+
+## 使用说明
+
+1. **新建对话**: 点击侧边栏的 "+ New Chat" 按钮
+2. **切换会话**: 点击侧边栏中的会话列表项
+3. **删除会话**: 悬停会话并点击 × 按钮
+4. **选择模型**: 在顶部下拉菜单选择模型
+5. **调整思考**: 通过 Thinking 开关和 Effort 下拉框控制推理过程显示
+6. **清除对话**: 点击 "Clear" 按钮（当前会话）
 
 ## 注意事项
 
