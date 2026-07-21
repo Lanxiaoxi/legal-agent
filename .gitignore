@@ -32,6 +32,9 @@ Thumbs.db
 web-chat-app/backend/config.json
 web-chat-app/.venv/
 
+# Model cache
+web-chat-app/backend/tools/.cache/
+
 # Docs and logs
 doc/
 log/
