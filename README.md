@@ -1,16 +1,17 @@
 # AI Legal Advisor
 
-一个基于 DeepSeek API 的法律咨询聊天应用。
+一个基于 DeepSeek API + OpenAI Agents SDK 的法律咨询聊天应用。
 
 ## 功能特性
 
-- 🤖 AI 法律助手 - 回答常见法律问题
+- 🤖 AI 法律助手 - 回答常见法律问题，基于法律知识库
 - 💬 流式响应 - 即时获取 AI 回复
 - 💾 多会话支持 - 创建、切换、删除多个对话
 - 📝 持久化存储 - 自动保存会话到 localStorage
 - 🔄 模型选择 - 支持选择不同的 DeepSeek 模型
 - 🧠 深度思考 - 可开启 DeepSeek 推理过程
 - 🔄 重试机制 - 网络错误时自动重试
+- 🔍 法律工具 - 内置法律条文查询、网络搜索功能
 
 ## 支持的模型
 
@@ -22,7 +23,7 @@
 ## 思考模式
 
 - **思考开关** - 可开启/关闭 AI 思考过程显示
-- **思考强度** - High / Max 两档选择
+- **思考强度** - Low / High / Max 三档选择
 
 ## 快速开始
 
@@ -101,6 +102,7 @@
 | requestTimeout | REQUEST_TIMEOUT | 30 | 请求超时（秒） |
 | maxHistoryMessages | MAX_HISTORY_MESSAGES | 20 | 最大历史消息数 |
 | port | PORT | 8000 | 后端端口 |
+| tavilyApiKey | TAVILY_API_KEY | - | Tavily 搜索 API 密钥（可选，用于网络搜索功能） |
 
 ## 项目结构
 

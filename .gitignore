@@ -28,3 +28,7 @@ Thumbs.db
 # Project specific
 web-chat-app/backend/config.json
 web-chat-app/.venv/
+
+# Docs and logs
+doc/
+log/
