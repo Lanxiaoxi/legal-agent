@@ -612,7 +612,7 @@ function render() {
             return `
               <div class="session-item ${isActive ? 'active' : ''}" data-session-id="${id}">
                 <span class="session-title">${escapeHtml(s.title)}</span>
-                <button class="delete-session-btn" title="Delete session">×</button>
+                <button class="delete-session-btn" title="Delete session" onclick="event.stopPropagation(); deleteSession('${id}')">×</button>
               </div>
             `;
           }).join('')}
@@ -680,7 +680,7 @@ function renderMessages() {
       return `
         <div class="session-item ${isActive ? 'active' : ''}" data-session-id="${id}">
           <span class="session-title">${escapeHtml(s.title)}</span>
-          <button class="delete-session-btn" title="Delete session">×</button>
+          <button class="delete-session-btn" title="Delete session" onclick="event.stopPropagation(); deleteSession('${id}')">×</button>
         </div>
       `;
     }).join('');
