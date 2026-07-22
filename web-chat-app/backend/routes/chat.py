@@ -98,8 +98,18 @@ async def stream_chat_response(
             else:
                 agent = create_legal_agent()
             
-            # 运行 Agent
-            result = Runner.run_streamed(agent, message)
+            # 将历史消息转换为 Agent 期望的格式
+            input_messages = []
+            for msg in history:
+                input_messages.append({
+                    "role": msg.get("role", "user"),
+                    "content": msg.get("content", "")
+                })
+            # 添加当前用户消息
+            input_messages.append({"role": "user", "content": message})
+            
+            # 运行 Agent，传入历史消息
+            result = Runner.run_streamed(agent, input_messages)
             
             # 记录工具调用
             tool_calls_log = []

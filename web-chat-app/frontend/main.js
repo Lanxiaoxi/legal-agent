@@ -217,6 +217,8 @@ function setupEventListeners() {
   document.addEventListener('change', handleChange);
 }
 
+
+
 // Handle click events
 function handleClick(e) {
   if (e.target.classList.contains('send-btn')) {
@@ -229,8 +231,9 @@ function handleClick(e) {
     createNewSession();
     render();
     if (elements.input) elements.input.focus();
-  } else if (e.target.classList.contains('session-item')) {
-    const sessionId = e.target.dataset.sessionId;
+  } else if (e.target.closest('.session-item')) {
+    const sessionItem = e.target.closest('.session-item');
+    const sessionId = sessionItem.dataset.sessionId;
     switchSession(sessionId);
   } else if (e.target.classList.contains('delete-session-btn')) {
     const sessionId = e.target.closest('.session-item').dataset.sessionId;
