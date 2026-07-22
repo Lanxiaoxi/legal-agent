@@ -9,8 +9,6 @@ dependencies = [
     "httpx>=0.24.0",
     "openai-agents>=0.18.3",
     "beautifulsoup4>=4.12.0",
-    "pinecone>=9.1.0",
-    "sentence-transformers>=2.2.0",
 ]
 
 [project.optional-dependencies]
