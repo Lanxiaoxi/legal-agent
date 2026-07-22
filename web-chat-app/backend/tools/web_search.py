@@ -1,5 +1,6 @@
 """Web搜索工具"""
 import logging
+import time
 
 import httpx
 from agents import function_tool
@@ -19,7 +20,9 @@ def web_search(query: str) -> str:
     Returns:
         格式化后的搜索结果
     """
-    logger.info("call web_search")
+    import time
+    start_time = time.time()
+    logger.info(f"[TOOL_CALL] web_search - query: {query}")
     
     tavily_key = config.tavily_api_key
     if not tavily_key:
@@ -52,5 +55,8 @@ def web_search(query: str) -> str:
         
         return "搜索结果:\n\n" + "\n\n".join(formatted_results)
     except Exception as e:
-        logger.error(f"Web search error: {e}")
+        logger.error(f"[TOOL_ERROR] web_search failed - query: {query}, error: {e}")
         return f"搜索失败: {str(e)}"
+    finally:
+        elapsed_ms = (time.time() - start_time) * 1000
+        logger.info(f"[TOOL_END] web_search completed - query: {query}, elapsed: {elapsed_ms:.0f}ms")

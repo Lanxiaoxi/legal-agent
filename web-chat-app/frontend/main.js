@@ -373,7 +373,7 @@ async function sendMessage() {
           const data = JSON.parse(line.slice(6));
 
           // 添加延迟，方便观察流式输出过程
-          await new Promise(r => setTimeout(r, 25));
+          await new Promise(r => setTimeout(r, 20));
 
             // Update content (streamed, append)
             if (data.content !== undefined && data.content !== null) {

@@ -1,6 +1,7 @@
 """网页抓取工具"""
 import logging
 import random
+import time
 
 import httpx
 from bs4 import BeautifulSoup
@@ -60,7 +61,8 @@ def fetch_webpage(url: str) -> str:
     Returns:
         提取的网页文本内容
     """
-    logger.info(f"call fetch_webpage: {url}")
+    start_time = time.time()
+    logger.info(f"[TOOL_CALL] fetch_webpage - url: {url}")
     
     # 从池中随机获取请求头
     headers = get_random_headers()
@@ -84,15 +86,20 @@ def fetch_webpage(url: str) -> str:
         # 限制返回长度
         if len(text) > 5000:
             text = text[:5000] + "\n\n[内容已被截断...]"
-        logger.info("fetch success")
+        
+        elapsed_ms = (time.time() - start_time) * 1000
+        logger.info(f"[TOOL_END] fetch_webpage completed - url: {url}, content_length: {len(text)}, elapsed: {elapsed_ms:.0f}ms")
         return f"网页内容 ({url}):\n\n{text}"
         
     except httpx.TimeoutException:
-        logger.info("fetch fail")
+        elapsed_ms = (time.time() - start_time) * 1000
+        logger.warning(f"[TOOL_ERROR] fetch_webpage timeout - url: {url}, elapsed: {elapsed_ms:.0f}ms")
         return "抓取失败: 请求超时"
     except httpx.HTTPStatusError as e:
-        logger.info("fetch fail")
+        elapsed_ms = (time.time() - start_time) * 1000
+        logger.warning(f"[TOOL_ERROR] fetch_webpage HTTP error - url: {url}, status: {e.response.status_code}, elapsed: {elapsed_ms:.0f}ms")
         return f"抓取失败: HTTP {e.response.status_code}"
     except Exception as e:
-        logger.error(f"Fetch webpage error: {e}")
+        elapsed_ms = (time.time() - start_time) * 1000
+        logger.error(f"[TOOL_ERROR] fetch_webpage failed - url: {url}, error: {e}, elapsed: {elapsed_ms:.0f}ms")
         return f"抓取失败: {str(e)}"

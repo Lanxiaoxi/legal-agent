@@ -1,6 +1,7 @@
 """法律条文查询工具"""
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -154,7 +155,8 @@ def query_legal(
         - query_legal(keyword="监护人")  # 搜索包含"监护人"的条款
         - query_legal(tag="婚姻家庭")  # 搜索标签为"婚姻家庭"的条款
     """
-    logger.info(f"query_legal: article={article_number}, keyword={keyword}, tag={tag}, law={law}")
+    start_time = time.time()
+    logger.info(f"[TOOL_CALL] query_legal - article: {article_number}, keyword: {keyword}, tag: {tag}, law: {law}")
     
     # 加载索引
     index = _load_index()
@@ -176,12 +178,14 @@ def query_legal(
             break
     
     if not law_info:
+        logger.warning(f"[TOOL_ERROR] query_legal - law not found: {law}")
         return f"错误：未找到法律文件 '{law}'。可用法律：{', '.join([l['文件名'] for l in law_list])}"
     
     # 加载法律内容
     try:
         legal_data = _load_legal_file(law_file)
     except FileNotFoundError:
+        logger.warning(f"[TOOL_ERROR] query_legal - file not found: {law_file}")
         return f"错误：法律文件 '{law_file}' 不存在"
     
     clauses = legal_data.get("条款", [])
@@ -200,21 +204,29 @@ def query_legal(
                 "标签": article.get("标签", [])
             }]
         else:
+            elapsed_ms = (time.time() - start_time) * 1000
+            logger.info(f"[TOOL_END] query_legal - article: {article_number}, result: not_found, elapsed: {elapsed_ms:.0f}ms")
             return f"未找到条款 '{article_number}'"
     
     elif keyword:
         # 按关键词搜索
         results = _search_by_keyword(clauses, keyword)
         if not results:
+            elapsed_ms = (time.time() - start_time) * 1000
+            logger.info(f"[TOOL_END] query_legal - keyword: {keyword}, result: not_found, elapsed: {elapsed_ms:.0f}ms")
             return f"未找到包含关键词 '{keyword}' 的条款"
     
     elif tag:
         # 按标签搜索
         results = _search_by_tag(clauses, tag)
         if not results:
+            elapsed_ms = (time.time() - start_time) * 1000
+            logger.info(f"[TOOL_END] query_legal - tag: {tag}, result: not_found, elapsed: {elapsed_ms:.0f}ms")
             return f"未找到标签为 '{tag}' 的条款"
     
     else:
+        elapsed_ms = (time.time() - start_time) * 1000
+        logger.warning(f"[TOOL_ERROR] query_legal - no query condition provided, elapsed: {elapsed_ms:.0f}ms")
         return "错误：必须提供 article_number、keyword 或 tag 之一作为查询条件"
     
     # 格式化输出
@@ -233,7 +245,10 @@ def query_legal(
     if len(results) > 1:
         output.append(f"共找到 {len(results)} 条相关条款")
     
-    return "\n".join(output)
+    result = "\n".join(output)
+    elapsed_ms = (time.time() - start_time) * 1000
+    logger.info(f"[TOOL_END] query_legal completed - article: {article_number}, keyword: {keyword}, tag: {tag}, results_count: {len(results)}, elapsed: {elapsed_ms:.0f}ms")
+    return result
 
 
 @function_tool
@@ -246,13 +261,16 @@ def get_legal_info(law: Optional[str] = None) -> str:
     Returns:
         法律的基本信息
     """
-    logger.info(f"get_legal_info: law={law}")
+    start_time = time.time()
+    logger.info(f"[TOOL_CALL] get_legal_info - law: {law}")
     
     index = _load_index()
     law_list = index.get("文档列表", [])
+    result = ""
     
     if law:
         # 返回指定法律信息
+        found = False
         for l in law_list:
             if l.get("文件名") == law:
                 info = [
@@ -267,8 +285,11 @@ def get_legal_info(law: Optional[str] = None) -> str:
                     f"适用场景：{', '.join(l.get('适用场景', []))}",
                     f"简介：{l.get('简介', '无')}",
                 ]
-                return "\n".join(info)
-        return f"未找到法律文件 '{law}'"
+                result = "\n".join(info)
+                found = True
+                break
+        if not found:
+            result = f"未找到法律文件 '{law}'"
     else:
         # 返回所有法律列表
         output = ["【法律文档索引】", ""]
@@ -285,4 +306,8 @@ def get_legal_info(law: Optional[str] = None) -> str:
         output.append("- query_legal(tag='婚姻家庭')  # 按标签搜索")
         output.append("- get_legal_info(law='minfadian.json')  # 获取法律信息")
         
-        return "\n".join(output)
+        result = "\n".join(output)
+    
+    elapsed_ms = (time.time() - start_time) * 1000
+    logger.info(f"[TOOL_END] get_legal_info completed - law: {law}, elapsed: {elapsed_ms:.0f}ms")
+    return result
