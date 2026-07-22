@@ -483,3 +483,23 @@ body {
   max-height: 300px;
   overflow-y: auto;
 }
+/* Response time display - 在气泡外面 */
+.response-time {
+  font-size: 11px;
+  color: #aaa;
+  margin-top: 4px;
+  padding-left: 8px;
+}
+
+.message-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.message-wrapper-user {
+  align-items: flex-end;
+}
+
+.message-wrapper-assistant {
+  align-items: flex-start;
+}

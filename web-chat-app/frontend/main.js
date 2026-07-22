@@ -57,6 +57,8 @@ let state = {
   isStreaming: false,
   currentStreamingContent: '',
   currentStreamingId: null,
+  responseTimeInterval: null,  // 定时器ID
+  showResponseTime: false,     // 是否开始显示耗时
   selectedModel: CONFIG.MODELS[0].value,
   reasoningEffort: 'high',  // high, max
   thinkingEnabled: true,    // thinking mode on/off
@@ -87,6 +89,7 @@ function loadHistory() {
       state.sessions = data.sessions || {};
       state.currentSessionId = data.currentSessionId || null;
       state.hasSession = Object.keys(state.sessions).length > 0;
+      console.log('[INFO] Loaded sessions from storage:', Object.keys(state.sessions).length);
       
       // Load current session settings
       if (state.currentSessionId && state.sessions[state.currentSessionId]) {
@@ -102,11 +105,12 @@ function loadHistory() {
         createNewSession();
       }
     } else {
+      console.log('[INFO] No stored sessions, creating default');
       createNewSession();
     }
     renderMessages();
   } catch (e) {
-    console.error('Failed to load sessions:', e);
+    console.error('[ERROR] Failed to load sessions:', e);
     state.sessions = {};
     state.hasSession = false;
     createNewSession();
@@ -281,9 +285,12 @@ async function sendMessage() {
   const message = input.value;
   const validation = validateInput(message);
   if (!validation.valid) {
+    console.log('[WARN] Invalid input:', validation.error);
     setError(validation.error);
     return;
   }
+
+  console.log('[INFO] Sending message, length:', message.length, 'model:', state.selectedModel);
 
   // Clear error and disable input
   setError(null);
@@ -321,7 +328,8 @@ async function sendMessage() {
     role: 'assistant',
     content: '',
     reasoningContent: state.thinkingEnabled ? '' : undefined,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    startTime: Date.now()  // 记录开始时间，用于计算回答耗时
   };
 
   // Add AI message placeholder after user message
@@ -329,6 +337,23 @@ async function sendMessage() {
   state.currentStreamingId = aiMessage.id;
   state.currentStreamingContent = '';
   state.isStreaming = true;
+  
+  // 重置状态
+  state.showResponseTime = false;
+  
+  // 启动定时器，在后台计时（但不显示），直到收到首个content才开始显示
+  state.responseTimeInterval = setInterval(() => {
+    if (state.isStreaming) {
+      // 只更新内存中的计时，不显示
+      const session = getCurrentSession();
+      if (session) {
+        const msg = session.messages.find(m => m.id === state.currentStreamingId);
+        if (msg && msg.startTime) {
+          msg.responseTime = Date.now() - msg.startTime;
+        }
+      }
+    }
+  }, 500);
   
   // Render immediately so reasoning section exists
   renderMessages();
@@ -354,10 +379,13 @@ async function sendMessage() {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      console.error('[ERROR] HTTP error:', response.status, errorData);
       throw new Error(errorData.error || `HTTP ${response.status}`);
     }
 
-    // Handle streaming response - 使用 LineBreakTransformer 实现真正的逐行流式处理
+    console.log('[INFO] Response received, starting stream');
+    
+    // Handle streaming response
     const reader = response.body
       .pipeThrough(new TextDecoderStream())
       .pipeThrough(new TransformStream(new LineBreakTransformer()))
@@ -377,6 +405,12 @@ async function sendMessage() {
 
             // Update content (streamed, append)
             if (data.content !== undefined && data.content !== null) {
+              // 首次收到非空内容时，开始显示耗时
+              if (!state.showResponseTime && data.content !== '') {
+                state.showResponseTime = true;
+                updateResponseTime();
+              }
+              
               state.currentStreamingContent += data.content;
               
               // Update session data
@@ -463,6 +497,8 @@ async function sendMessage() {
             
             if (data.done) {
               state.isStreaming = false;
+              // 实时更新耗时显示
+              updateResponseTime();
               finalizeStreamingMessage();
             }
             if (data.error) {
@@ -474,6 +510,13 @@ async function sendMessage() {
         }
       }
     } catch (error) {
+      // 停止定时器
+      if (state.responseTimeInterval) {
+        clearInterval(state.responseTimeInterval);
+        state.responseTimeInterval = null;
+      }
+      // 重置显示状态
+      state.showResponseTime = false;
       state.isStreaming = false;
       handleError(error);
   } finally {
@@ -490,12 +533,58 @@ async function sendMessage() {
 
 // Finalize streaming message
 function finalizeStreamingMessage() {
+  // 停止定时器
+  if (state.responseTimeInterval) {
+    clearInterval(state.responseTimeInterval);
+    state.responseTimeInterval = null;
+  }
+  
+  // 重置显示状态
+  state.showResponseTime = false;
+  
   const session = getCurrentSession();
   if (session) {
+    // 计算回答耗时
+    const msg = session.messages.find(m => m.id === state.currentStreamingId);
+    if (msg && msg.startTime) {
+      msg.responseTime = Date.now() - msg.startTime;
+      delete msg.startTime;  // 清理临时字段
+      console.log('[INFO] Response completed, total time:', msg.responseTime, 'ms');
+    }
     session.updatedAt = Date.now();
   }
   saveHistory();
   renderMessages();
+}
+
+// Update response time display during streaming
+function updateResponseTime() {
+  // 如果还未开始显示耗时，直接返回
+  if (!state.showResponseTime) return;
+  
+  const session = getCurrentSession();
+  if (!session || !state.currentStreamingId) return;
+  
+  const msg = session.messages.find(m => m.id === state.currentStreamingId);
+  if (!msg || !msg.startTime) return;
+  
+  const responseTime = Date.now() - msg.startTime;
+  const seconds = (responseTime / 1000).toFixed(2);
+  
+  // 直接更新耗时显示元素（在气泡外面）
+  const wrapperEls = document.querySelectorAll('.message-wrapper-assistant');
+  if (wrapperEls.length > 0) {
+    const lastWrapper = wrapperEls[wrapperEls.length - 1];
+    let timeEl = lastWrapper.querySelector('.response-time');
+    
+    if (!timeEl) {
+      timeEl = document.createElement('div');
+      timeEl.className = 'response-time';
+      lastWrapper.appendChild(timeEl);
+    }
+    
+    timeEl.textContent = `Thinking time : ${seconds}s`;
+  }
 }
 
 // Retry failed message
@@ -523,6 +612,8 @@ async function retryMessage() {
 
 // Handle errors
 function handleError(error) {
+  console.error('[ERROR] Chat error:', error.message);
+  
   const session = getCurrentSession();
   if (session) {
     // Remove failed AI message
@@ -705,10 +796,30 @@ function renderMessages() {
         </div>
       `;
     }
+
+    // 显示回答耗时（在气泡外面）
+    let responseTimeSection = '';
+    if (msg.role === 'assistant' && msg.responseTime !== undefined) {
+      const seconds = (msg.responseTime / 1000).toFixed(2);
+      responseTimeSection = `<div class="response-time">thinking time : ${seconds}s</div>`;
+    }
     
+    // 助手消息需要包裹在wrapper中以显示耗时
+    if (msg.role === 'assistant') {
+      return `
+        <div class="message-wrapper message-wrapper-assistant">
+          <div class="message message-assistant">
+            ${thinkingSection}
+            <div class="message-content">${renderedContent}</div>
+          </div>
+          ${responseTimeSection}
+        </div>
+      `;
+    }
+    
+    // 用户消息保持原样
     return `
-      <div class="message message-${msg.role}">
-        ${thinkingSection}
+      <div class="message message-user">
         <div class="message-content">${renderedContent}</div>
       </div>
     `;

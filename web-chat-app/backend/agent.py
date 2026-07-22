@@ -54,8 +54,11 @@ def create_legal_agent(model: Optional[OpenAIChatCompletionsModel] = None) -> Ag
     if model is None:
         model = config.get_model()
     
+    agent_name = "法律助手"
+    logger.info(f"Creating legal agent with model: {model.model}")
+    
     return Agent(
-        name="法律助手",
+        name=agent_name,
         instructions=LEGAL_AGENT_INSTRUCTIONS,
         model=model,
         tools=TOOLS,

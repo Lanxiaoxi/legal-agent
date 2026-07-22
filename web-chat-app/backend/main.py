@@ -33,10 +33,14 @@ app.include_router(chat_router)
 @app.get("/")
 async def root():
     """健康检查端点"""
+    logger.info("Health check endpoint called")
     return {"status": "ok", "message": "Legal Advisor API is running"}
 
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", "8000"))
+    logger.info(f"Starting Legal Advisor API on port {port}")
+    logger.info(f"CORS enabled for: {config.cors_origin}")
+    logger.info(f"Default model: {config.model}")
     uvicorn.run(app, host="0.0.0.0", port=port)

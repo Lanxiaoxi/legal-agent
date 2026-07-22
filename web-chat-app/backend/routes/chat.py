@@ -178,14 +178,17 @@ async def chat(request: Request) -> StreamingResponse:
     Returns:
         流式响应
     """
+    # 解析请求
     try:
         data = await request.json()
     except Exception:
+        logger.warning("Failed to parse JSON request")
         raise HTTPException(status_code=400, detail="Invalid JSON")
     
     # 验证请求
     is_valid, error = validate_chat_request(data)
     if not is_valid:
+        logger.warning(f"Invalid chat request: {error}")
         raise HTTPException(status_code=400, detail=f"Invalid request: {error}")
     
     message = data["message"]
@@ -193,6 +196,8 @@ async def chat(request: Request) -> StreamingResponse:
     model = data.get("model")
     thinking = data.get("thinking", True)
     reasoning_effort = data.get("reasoning_effort", "high")
+    
+    logger.info(f"Chat request received - model: {model}, thinking: {thinking}, reasoning_effort: {reasoning_effort}, message_length: {len(message)}")
     
     # 流式响应
     return await stream_chat_response(message, history, model, thinking, reasoning_effort)
