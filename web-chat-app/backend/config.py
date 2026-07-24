@@ -22,7 +22,10 @@ class Config:
     request_timeout: int = 30
     max_history_messages: int = 20
     tavily_api_key: Optional[str] = None
-    
+    upload_dir: str = "./uploads"
+    upload_max_size_mb: int = 20
+    upload_ttl_days: int = 7
+
     # 内部缓存的客户端和模型实例
     _deepseek_client: Optional[AsyncOpenAI] = None
     _model_instance: Optional[OpenAIChatCompletionsModel] = None
@@ -57,7 +60,10 @@ def load_config() -> Config:
         "deepseek_base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
         "model": os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
         "request_timeout": int(os.getenv("REQUEST_TIMEOUT", "30")),
-        "max_history_messages": int(os.getenv("MAX_HISTORY_MESSAGES", "20"))
+        "max_history_messages": int(os.getenv("MAX_HISTORY_MESSAGES", "20")),
+        "upload_dir": os.getenv("UPLOAD_DIR", "./uploads"),
+        "upload_max_size_mb": int(os.getenv("UPLOAD_MAX_SIZE_MB", "20")),
+        "upload_ttl_days": int(os.getenv("UPLOAD_TTL_DAYS", "7"))
     }
     
     # 如果 API key 不在环境变量，尝试从 config.json 加载
@@ -76,6 +82,10 @@ def load_config() -> Config:
                 config_data["max_history_messages"] = file_config.get("maxHistoryMessages", config_data["max_history_messages"])
                 # 从配置文件读取 tavily API key
                 config_data["tavily_api_key"] = file_config.get("tavilyApiKey")
+                # 上传配置
+                config_data["upload_dir"] = file_config.get("uploadDir", config_data["upload_dir"])
+                config_data["upload_max_size_mb"] = file_config.get("uploadMaxSizeMb", config_data["upload_max_size_mb"])
+                config_data["upload_ttl_days"] = file_config.get("uploadTtlDays", config_data["upload_ttl_days"])
         except Exception as e:
             logger.error(f"Failed to load config.json: {e}")
     

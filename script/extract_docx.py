@@ -45,10 +45,17 @@ def extract_text_from_docx(docx_path: str, output_path: str | None = None) -> st
 
 
 if __name__ == "__main__":
-    docx_file = r"c:\Users\echuzhi\repo\legal-agent\doc\xianfa.docx"
-    output_file = r"c:\Users\echuzhi\repo\legal-agent\doc\xianfa.txt"
+    import glob
     
-    text = extract_text_from_docx(docx_file, output_file)
-    print(f"共提取 {len(text)} 字符的文本")
-    print("\n前 500 字符预览:")
-    print(text[:500])
+    doc_dir = r"c:\Users\echuzhi\repo\legal-agent\doc"
+    docx_files = glob.glob(f"{doc_dir}/*.docx")
+    
+    print(f"找到 {len(docx_files)} 个 docx 文件\n")
+    
+    for docx_file in sorted(docx_files):
+        docx_path = Path(docx_file)
+        output_file = str(docx_path.with_suffix('.txt'))
+        
+        print(f"处理: {docx_path.name}")
+        text = extract_text_from_docx(docx_file, output_file)
+        print(f"  -> 已保存到: {docx_path.stem}.txt ({len(text)} 字符)\n")

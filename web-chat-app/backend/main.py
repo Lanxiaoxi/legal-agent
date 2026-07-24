@@ -29,12 +29,29 @@ app.add_middleware(
 # 注册路由
 app.include_router(chat_router)
 
+from routes.upload import router as upload_router
+app.include_router(upload_router)
+
 
 @app.get("/")
 async def root():
     """健康检查端点"""
     logger.info("Health check endpoint called")
     return {"status": "ok", "message": "Legal Advisor API is running"}
+
+
+@app.on_event("startup")
+async def startup_event():
+    """启动时创建上传目录并启动 TTL 清理任务"""
+    import asyncio
+    from pathlib import Path
+
+    upload_dir = Path(config.upload_dir)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    from routes.upload import cleanup_expired_files
+    asyncio.create_task(cleanup_expired_files())
+    logger.info(f"Upload dir: {upload_dir.absolute()}, TTL: {config.upload_ttl_days} days")
 
 
 if __name__ == "__main__":

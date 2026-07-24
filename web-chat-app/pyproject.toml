@@ -9,6 +9,9 @@ dependencies = [
     "httpx>=0.24.0",
     "openai-agents>=0.18.3",
     "beautifulsoup4>=4.12.0",
+    "python-multipart>=0.0.6",
+    "python-docx>=0.8.11",
+    "pymupdf>=1.23.0",
 ]
 
 [project.optional-dependencies]
@@ -18,4 +21,6 @@ dev = [
 ]
 
 [tool.uv]
-dev-dependencies = []
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true

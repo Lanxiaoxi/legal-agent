@@ -35,6 +35,9 @@ web-chat-app/.venv/
 # Model cache
 web-chat-app/backend/tools/.cache/
 
+# Uploaded files
+uploads/
+
 # Docs and logs
 doc/
 log/

@@ -196,8 +196,14 @@ async def chat(request: Request) -> StreamingResponse:
     model = data.get("model")
     thinking = data.get("thinking", True)
     reasoning_effort = data.get("reasoning_effort", "high")
-    
-    logger.info(f"Chat request received - model: {model}, thinking: {thinking}, reasoning_effort: {reasoning_effort}, message_length: {len(message)}")
+    session_id = data.get("session_id", "")
+
+    # 设置当前请求的 session_id，供 tool 使用
+    if session_id:
+        from session_context import current_session_id
+        current_session_id.set(session_id)
+
+    logger.info(f"Chat request received - model: {model}, thinking: {thinking}, reasoning_effort: {reasoning_effort}, message_length: {len(message)}, session_id: {session_id}")
     
     # 流式响应
     return await stream_chat_response(message, history, model, thinking, reasoning_effort)

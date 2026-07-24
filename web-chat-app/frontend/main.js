@@ -1,12 +1,16 @@
 // Configuration
 const CONFIG = {
   API_URL: '/api/chat',
+  UPLOAD_URL: '/api/upload',
+  FILES_URL: '/api/files',
   MAX_MESSAGE_LENGTH: 5000,
   MAX_HISTORY_MESSAGES: 100,
   STORAGE_KEY: 'chat_sessions',
   MAX_RETRIES: 3,
   LOADING_DELAY: 200,
   OPTIMISTIC_UPDATE_DELAY: 100,
+  ALLOWED_FILE_TYPES: ['.txt', '.pdf', '.docx'],
+  MAX_FILE_SIZE_MB: 20,
   MODELS: [
     { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
     { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' }
@@ -62,7 +66,8 @@ let state = {
   selectedModel: CONFIG.MODELS[0].value,
   reasoningEffort: 'high',  // high, max
   thinkingEnabled: true,    // thinking mode on/off
-  hasSession: true        // Track if there is an active session
+  hasSession: true,        // Track if there is an active session
+  uploadedFiles: []         // Current session uploaded files: [{id, name, type, size, chunk_count, created_at}]
 };
 
 // Current session convenience getter
@@ -78,6 +83,10 @@ function init() {
   render();
   loadHistory();
   setupEventListeners();
+  // Restore file list for current session
+  if (state.currentSessionId) {
+    restoreFileList(state.currentSessionId);
+  }
 }
 
 // Load all sessions from localStorage
@@ -165,10 +174,12 @@ function switchSession(sessionId) {
     state.currentSessionId = sessionId;
     state.selectedModel = state.sessions[sessionId].model || CONFIG.MODELS[0].value;
     state.reasoningEffort = state.sessions[sessionId].reasoningEffort || 'high';
-    state.thinkingEnabled = state.sessions[sessionId].thinkingEnabled !== undefined 
-      ? state.sessions[sessionId].thinkingEnabled 
+    state.thinkingEnabled = state.sessions[sessionId].thinkingEnabled !== undefined
+      ? state.sessions[sessionId].thinkingEnabled
       : true;
     state.error = null;
+    // Restore file list for this session
+    restoreFileList(sessionId);
     saveHistory();
     render();
     scrollToBottom();
@@ -179,11 +190,15 @@ function switchSession(sessionId) {
 function deleteSession(sessionId) {
   const wasCurrentSession = state.currentSessionId === sessionId;
   
+  // Fire-and-forget: clean up backend files
+  fetch(`${CONFIG.FILES_URL}/${sessionId}`, { method: 'DELETE' }).catch(() => {});
+
   delete state.sessions[sessionId];
-  
+
   // If no sessions left, switch to empty state (user creates new manually)
   if (Object.keys(state.sessions).length === 0) {
     state.currentSessionId = null;
+    state.uploadedFiles = [];
     state.hasSession = false;
   } else if (wasCurrentSession) {
     // If deleted current session, switch to another and load its settings
@@ -194,7 +209,7 @@ function deleteSession(sessionId) {
     state.reasoningEffort = newSession.reasoningEffort || 'high';
     state.thinkingEnabled = newSession.thinkingEnabled !== undefined ? newSession.thinkingEnabled : true;
   }
-  
+
   saveHistory();
   render();
 }
@@ -219,6 +234,25 @@ function setupEventListeners() {
   document.addEventListener('click', handleClick);
   document.addEventListener('keypress', handleKeyPress);
   document.addEventListener('change', handleChange);
+  // Drag-and-drop file upload
+  document.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    const inputArea = document.querySelector('.input-area');
+    if (inputArea) inputArea.classList.add('drag-over');
+  });
+  document.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    const inputArea = document.querySelector('.input-area');
+    if (inputArea) inputArea.classList.remove('drag-over');
+  });
+  document.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const inputArea = document.querySelector('.input-area');
+    if (inputArea) inputArea.classList.remove('drag-over');
+    if (e.dataTransfer.files.length > 0) {
+      handleFileUpload(e.dataTransfer.files);
+    }
+  });
 }
 
 
@@ -261,6 +295,114 @@ function handleKeyPress(e) {
   if (e.target.tagName === 'INPUT' && e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     sendMessage();
+  }
+}
+
+// File upload handling
+
+// Trigger file input click
+function triggerFileUpload() {
+  const fileInput = document.getElementById('file-upload-input');
+  if (fileInput) {
+    fileInput.click();
+  }
+}
+
+// Handle file selection from input or drag-and-drop
+async function handleFileUpload(fileList) {
+  if (!state.hasSession) return;
+
+  const files = Array.from(fileList);
+  if (files.length === 0) return;
+
+  // Validate files
+  for (const file of files) {
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!CONFIG.ALLOWED_FILE_TYPES.includes(ext)) {
+      setError(`不支持的文件类型: ${file.name}（仅支持 ${CONFIG.ALLOWED_FILE_TYPES.join(', ')}）`);
+      return;
+    }
+    if (file.size > CONFIG.MAX_FILE_SIZE_MB * 1024 * 1024) {
+      setError(`文件 ${file.name} 超过 ${CONFIG.MAX_FILE_SIZE_MB}MB 限制`);
+      return;
+    }
+  }
+
+  setError(null);
+
+  for (const file of files) {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('session_id', state.currentSessionId);
+
+      const response = await fetch(CONFIG.UPLOAD_URL, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `上传失败 (${response.status})`);
+      }
+
+      const data = await response.json();
+      state.uploadedFiles = data.files || [];
+      console.log('[INFO] File uploaded:', file.name, '→', state.uploadedFiles.length, 'files in session');
+    } catch (error) {
+      console.error('[ERROR] File upload failed:', error);
+      setError(`文件上传失败: ${error.message}`);
+    }
+  }
+
+  render();
+}
+
+// Remove file tag (only from UI state, backend files are kept for conversation context)
+function removeFileTag(fileId) {
+  state.uploadedFiles = state.uploadedFiles.filter(f => f.id !== fileId);
+  render();
+}
+
+// Render file tags above input
+function renderFileTags() {
+  if (!state.uploadedFiles || state.uploadedFiles.length === 0) return '';
+  return `
+    <div class="file-tags">
+      ${state.uploadedFiles.map(f => `
+        <span class="file-tag" title="${escapeHtml(f.name)} (${formatFileSize(f.size)})">
+          <span class="file-tag-icon">${getFileIcon(f.type)}</span>
+          <span class="file-tag-name">${escapeHtml(f.name)}</span>
+          <span class="file-tag-remove" onclick="event.stopPropagation(); removeFileTag('${f.id}')">×</span>
+        </span>
+      `).join('')}
+    </div>
+  `;
+}
+
+function getFileIcon(type) {
+  const icons = { txt: '📄', pdf: '📑', docx: '📝' };
+  return icons[type] || '📎';
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + 'B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
+}
+
+// Restore file list when switching sessions
+async function restoreFileList(sessionId) {
+  try {
+    const response = await fetch(`${CONFIG.FILES_URL}/${sessionId}`);
+    if (response.ok) {
+      const data = await response.json();
+      state.uploadedFiles = data.files || [];
+    } else {
+      state.uploadedFiles = [];
+    }
+  } catch (e) {
+    state.uploadedFiles = [];
   }
 }
 
@@ -365,12 +507,20 @@ async function sendMessage() {
       .slice(-20)
       .map(m => ({ role: m.role, content: m.content }));
 
+    // Append file reference to message if files exist
+    let fullMessage = message;
+    if (state.uploadedFiles.length > 0) {
+      const fileNames = state.uploadedFiles.map(f => f.name).join('、');
+      fullMessage = `[已上传文件: ${fileNames}]\n\n${message}`;
+    }
+
     const response = await fetch(CONFIG.API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        message, 
-        history, 
+      body: JSON.stringify({
+        message: fullMessage,
+        history,
+        session_id: state.currentSessionId,
         model: state.selectedModel,
         reasoning_effort: state.reasoningEffort,
         thinking: state.thinkingEnabled
@@ -738,8 +888,15 @@ function render() {
         ${!state.isStreaming && state.isLoading ? '<div class="loading-indicator">Thinking...</div>' : ''}
         ${state.error ? `<div class="error-message">${escapeHtml(state.error)}</div>` : ''}
         <div class="input-container">
-          <input type="text" placeholder="Ask a legal question..." maxlength="${CONFIG.MAX_MESSAGE_LENGTH}" ${state.isLoading || !state.hasSession ? 'disabled' : ''}>
-          <button class="send-btn" ${state.isLoading || !state.hasSession ? 'disabled' : ''}>Send</button>
+          <div class="input-area">
+            ${state.hasSession ? renderFileTags() : ''}
+            <div class="input-row">
+              <button class="upload-btn" onclick="triggerFileUpload()" ${state.isLoading || !state.hasSession ? 'disabled' : ''} title="上传文件">📎</button>
+              <input type="text" placeholder="Ask a legal question..." maxlength="${CONFIG.MAX_MESSAGE_LENGTH}" ${state.isLoading || !state.hasSession ? 'disabled' : ''}>
+              <button class="send-btn" ${state.isLoading || !state.hasSession ? 'disabled' : ''}>Send</button>
+            </div>
+          </div>
+          <input type="file" id="file-upload-input" accept="${CONFIG.ALLOWED_FILE_TYPES.join(',')}" onchange="handleFileUpload(this.files)" style="display:none" multiple>
         </div>
         ${!state.hasSession ? '<div class="no-session-message">No session available. Click "+ New Chat" to start a new conversation.</div>' : ''}
         ${state.retryCount > 0 && state.error ? '<div style="padding: 0 20px 16px;"><button class="retry-btn">Retry</button></div>' : ''}
