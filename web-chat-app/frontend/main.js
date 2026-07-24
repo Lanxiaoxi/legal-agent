@@ -424,12 +424,19 @@ async function sendMessage() {
   session.model = state.selectedModel;
 
   // Create user message
+  const attachedFiles = [...state.uploadedFiles];
   const userMessage = {
     id: generateId(),
     role: 'user',
     content: message,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    files: attachedFiles.length > 0 ? attachedFiles : undefined
   };
+
+  // Clear file tags from input area — they'll show in the message bubble instead
+  if (attachedFiles.length > 0) {
+    state.uploadedFiles = [];
+  }
 
   // Add user message to current session
   session.messages.push(userMessage);
@@ -487,8 +494,8 @@ async function sendMessage() {
 
     // Append file reference to message if files exist
     let fullMessage = message;
-    if (state.uploadedFiles.length > 0) {
-      const fileNames = state.uploadedFiles.map(f => f.name).join('、');
+    if (attachedFiles.length > 0) {
+      const fileNames = attachedFiles.map(f => f.name).join('、');
       fullMessage = `[已上传文件: ${fileNames}]\n\n${message}`;
     }
 
@@ -839,12 +846,42 @@ function renderWelcomeScreen() {
     <div class="welcome-screen">
       <div class="welcome-icon">⚖️</div>
       <h2>Legal AI Assistant</h2>
-      <p>I can help you with Chinese legal questions — ask about civil law, criminal law, labor disputes, contracts, and more. I search legal databases and the web to find relevant answers.</p>
-      <div class="welcome-suggestions">
-        <span class="suggestion-chip">劳动合同纠纷怎么处理</span>
-        <span class="suggestion-chip">工伤认定标准是什么</span>
-        <span class="suggestion-chip">合同违约责任有哪些</span>
-        <span class="suggestion-chip">民事诉讼法起诉流程</span>
+      <p>I can help you with Chinese legal questions — ask about civil law, criminal law, labor disputes, contracts, and more.</p>
+      <div class="welcome-categories">
+        <div class="welcome-category">
+          <div class="category-header">
+            <span class="category-icon">📋</span>
+            <span class="category-title">查法条</span>
+          </div>
+          <div class="category-chips">
+            <span class="suggestion-chip">《民法典》合同编有哪些规定</span>
+            <span class="suggestion-chip">《劳动合同法》关于解除合同的规定</span>
+            <span class="suggestion-chip">《刑法》中关于经济犯罪的条文</span>
+          </div>
+        </div>
+        <div class="welcome-category">
+          <div class="category-header">
+            <span class="category-icon">💬</span>
+            <span class="category-title">问一问</span>
+          </div>
+          <div class="category-chips">
+            <span class="suggestion-chip">劳动合同纠纷怎么处理</span>
+            <span class="suggestion-chip">工伤认定标准是什么</span>
+            <span class="suggestion-chip">合同违约责任有哪些</span>
+            <span class="suggestion-chip">民事诉讼法起诉流程</span>
+          </div>
+        </div>
+        <div class="welcome-category">
+          <div class="category-header">
+            <span class="category-icon">📝</span>
+            <span class="category-title">改文档</span>
+          </div>
+          <div class="category-chips">
+            <span class="suggestion-chip">帮我审阅这份文件的错漏</span>
+            <span class="suggestion-chip">起草一份保密协议</span>
+            <span class="suggestion-chip">帮我修改这份劳动合同</span>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -889,6 +926,21 @@ function renderMessages() {
       responseTimeSection = `<div class="response-time">${seconds}s</div>`;
     }
 
+    // File attachments for user messages
+    let filesSection = '';
+    if (msg.role === 'user' && msg.files && msg.files.length > 0) {
+      filesSection = `
+        <div class="message-files">
+          ${msg.files.map(f => `
+            <span class="message-file-tag">
+              <span class="message-file-icon">${getFileIcon(f.type)}</span>
+              <span class="message-file-name">${escapeHtml(f.name)}</span>
+            </span>
+          `).join('')}
+        </div>
+      `;
+    }
+
     // Avatar initials
     const avatarHtml = msg.role === 'user'
       ? '<div class="message-avatar avatar-user">You</div>'
@@ -903,6 +955,7 @@ function renderMessages() {
         <div class="message-row ${rowClass}">
           ${avatarHtml}
           <div class="message ${bubbleClass}">
+            ${filesSection}
             <div class="message-content">${renderedContent}</div>
           </div>
         </div>

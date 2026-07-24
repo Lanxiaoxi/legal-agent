@@ -476,12 +476,50 @@ body {
   line-height: 1.7;
 }
 
-.welcome-suggestions {
+.welcome-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: 1020px;
+}
+
+.welcome-category {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-xs);
+  transition: border-color var(--transition);
+}
+
+.welcome-category:hover {
+  border-color: #cbd5e1;
+}
+
+.category-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.category-icon {
+  font-size: 1.3em;
+}
+
+.category-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.category-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   justify-content: center;
-  max-width: 500px;
 }
 
 .suggestion-chip {
@@ -601,6 +639,40 @@ body {
   border: 1px solid var(--assistant-bubble-border);
   border-bottom-left-radius: var(--radius-xs);
   box-shadow: var(--shadow-xs);
+}
+
+/* ---- File attachments inside user messages ---- */
+.message-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.message-file-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.message-file-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.message-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
 }
 
 .message-error {
