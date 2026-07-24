@@ -1,6 +1,8 @@
 """Legal Advisor API - 主应用入口"""
 import os
 import logging
+from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,7 +14,34 @@ from agents import set_tracing_disabled
 set_tracing_disabled(disabled=True)
 
 # 配置日志
-logging.basicConfig(level=logging.INFO)
+LOG_DIR = Path(__file__).parent / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / "backend.log"
+
+# 日志格式
+LOG_FORMAT = logging.Formatter(
+    "%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+
+# 文件 handler — 每天轮转，保留 30 天
+file_handler = TimedRotatingFileHandler(
+    str(LOG_FILE),
+    when="midnight",
+    interval=1,
+    backupCount=30,
+    encoding="utf-8"
+)
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(LOG_FORMAT)
+
+# 控制台 handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(LOG_FORMAT)
+
+# 根 logger
+logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
 logger = logging.getLogger(__name__)
 
 # 创建 FastAPI 应用

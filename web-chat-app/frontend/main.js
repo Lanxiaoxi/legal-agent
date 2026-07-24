@@ -15,14 +15,6 @@ const CONFIG = {
     { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
     { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' }
   ],
-  REASONING_EFFORT: [
-    { value: 'high', label: 'High' },
-    { value: 'max', label: 'Max' }
-  ],
-  THINKING_OPTIONS: [
-    { value: true, label: 'On' },
-    { value: false, label: 'Off' }
-  ]
 };
 
 // LineBreakTransformer: 将连续流按行分割
@@ -64,8 +56,7 @@ let state = {
   responseTimeInterval: null,  // 定时器ID
   showResponseTime: false,     // 是否开始显示耗时
   selectedModel: CONFIG.MODELS[0].value,
-  reasoningEffort: 'high',  // high, max
-  thinkingEnabled: true,    // thinking mode on/off
+  enableWebSearch: true,   // 是否启用联网搜索
   hasSession: true,        // Track if there is an active session
   uploadedFiles: []         // Current session uploaded files: [{id, name, type, size, chunk_count, created_at}]
 };
@@ -103,10 +94,6 @@ function loadHistory() {
       // Load current session settings
       if (state.currentSessionId && state.sessions[state.currentSessionId]) {
         state.selectedModel = state.sessions[state.currentSessionId].model || CONFIG.MODELS[0].value;
-        state.reasoningEffort = state.sessions[state.currentSessionId].reasoningEffort || 'high';
-        state.thinkingEnabled = state.sessions[state.currentSessionId].thinkingEnabled !== undefined 
-          ? state.sessions[state.currentSessionId].thinkingEnabled 
-          : true;
       }
       
       // If no sessions, create a default one
@@ -140,9 +127,7 @@ function saveHistory() {
     localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify({
       sessions: state.sessions,
       currentSessionId: state.currentSessionId,
-      selectedModel: state.selectedModel,
-      reasoningEffort: state.reasoningEffort,
-      thinkingEnabled: state.thinkingEnabled
+      selectedModel: state.selectedModel
     }));
   } catch (e) {
     console.error('Failed to save sessions:', e);
@@ -159,8 +144,6 @@ function createNewSession() {
     createdAt: Date.now(),
     updatedAt: Date.now(),
     model: state.selectedModel,
-    reasoningEffort: state.reasoningEffort,
-    thinkingEnabled: state.thinkingEnabled
   };
   state.currentSessionId = sessionId;
   state.hasSession = true;
@@ -173,10 +156,6 @@ function switchSession(sessionId) {
   if (state.sessions[sessionId]) {
     state.currentSessionId = sessionId;
     state.selectedModel = state.sessions[sessionId].model || CONFIG.MODELS[0].value;
-    state.reasoningEffort = state.sessions[sessionId].reasoningEffort || 'high';
-    state.thinkingEnabled = state.sessions[sessionId].thinkingEnabled !== undefined
-      ? state.sessions[sessionId].thinkingEnabled
-      : true;
     state.error = null;
     // Restore file list for this session
     restoreFileList(sessionId);
@@ -206,8 +185,6 @@ function deleteSession(sessionId) {
     state.currentSessionId = remainingIds[0];
     const newSession = state.sessions[remainingIds[0]];
     state.selectedModel = newSession.model || CONFIG.MODELS[0].value;
-    state.reasoningEffort = newSession.reasoningEffort || 'high';
-    state.thinkingEnabled = newSession.thinkingEnabled !== undefined ? newSession.thinkingEnabled : true;
   }
 
   saveHistory();
@@ -276,6 +253,12 @@ function handleClick(e) {
   } else if (e.target.classList.contains('delete-session-btn')) {
     const sessionId = e.target.closest('.session-item').dataset.sessionId;
     deleteSession(sessionId);
+  } else if (e.target.classList.contains('suggestion-chip')) {
+    const text = e.target.textContent.trim();
+    if (elements.input) {
+      elements.input.value = text;
+      sendMessage();
+    }
   }
 }
 
@@ -283,10 +266,8 @@ function handleClick(e) {
 function handleChange(e) {
   if (e.target.classList.contains('model-select')) {
     state.selectedModel = e.target.value;
-  } else if (e.target.classList.contains('reasoning-select')) {
-    state.reasoningEffort = e.target.value;
-  } else if (e.target.classList.contains('thinking-select')) {
-    state.thinkingEnabled = e.target.value === 'true';
+  } else if (e.target.classList.contains('web-search-toggle')) {
+    state.enableWebSearch = e.target.checked;
   }
 }
 
@@ -439,10 +420,8 @@ async function sendMessage() {
   setLoading(true);
   input.disabled = true;
 
-  // Update session model and reasoning effort
+  // Update session model
   session.model = state.selectedModel;
-  session.reasoningEffort = state.reasoningEffort;
-  session.thinkingEnabled = state.thinkingEnabled;
 
   // Create user message
   const userMessage = {
@@ -469,7 +448,6 @@ async function sendMessage() {
     id: generateId(),
     role: 'assistant',
     content: '',
-    reasoningContent: state.thinkingEnabled ? '' : undefined,
     timestamp: Date.now(),
     startTime: Date.now()  // 记录开始时间，用于计算回答耗时
   };
@@ -497,7 +475,7 @@ async function sendMessage() {
     }
   }, 500);
   
-  // Render immediately so reasoning section exists
+  // Render immediately to show the AI message placeholder
   renderMessages();
   scrollToBottom();
 
@@ -522,8 +500,7 @@ async function sendMessage() {
         history,
         session_id: state.currentSessionId,
         model: state.selectedModel,
-        reasoning_effort: state.reasoningEffort,
-        thinking: state.thinkingEnabled
+        enable_web_search: state.enableWebSearch
       })
     });
 
@@ -565,84 +542,34 @@ async function sendMessage() {
               
               // Update session data
               const currentSession = getCurrentSession();
-              let reasoningContent = '';
               if (currentSession) {
                 const msg = currentSession.messages.find(m => m.id === state.currentStreamingId);
                 if (msg) {
                   msg.content = state.currentStreamingContent;
-                  reasoningContent = msg.reasoningContent || '';
                 }
               }
-              
+
               // Only update the content div directly, don't re-render entire messages
               const messageEls = document.querySelectorAll('.message-assistant');
               if (messageEls.length > 0) {
                 const lastAssistantMsg = messageEls[messageEls.length - 1];
                 let contentDiv = lastAssistantMsg.querySelector('.message-content');
-                
-                // If content div doesn't exist (was replaced), recreate it with reasoning section
+
                 if (!contentDiv) {
-                  const reasoningSectionHtml = `
-                    <div class="reasoning-section">
-                      <div class="reasoning-header" onclick="toggleReasoning(this)">
-                        <span class="reasoning-toggle">▶</span>
-                        <span>思考过程</span>
-                      </div>
-                      <div class="reasoning-content">${escapeHtml(reasoningContent)}</div>
-                    </div>
-                  `;
-                  lastAssistantMsg.innerHTML = reasoningSectionHtml + '<div class="message-content"></div>';
+                  lastAssistantMsg.innerHTML = '<div class="message-content"></div>';
                   contentDiv = lastAssistantMsg.querySelector('.message-content');
                 }
-                
+
                 if (contentDiv) {
-                  contentDiv.innerHTML = window.marked ? window.marked.parse(state.currentStreamingContent) : escapeHtml(state.currentStreamingContent);
-                }
-              }
-              scrollToBottom();
-            }
-            
-            // Update reasoning content - only when thinking mode is enabled
-            if (state.thinkingEnabled && data.reasoning_content !== undefined && data.reasoning_content !== null) {
-              const session = getCurrentSession();
-              if (session) {
-                const idx = session.messages.findIndex(m => m.id === state.currentStreamingId);
-                if (idx !== -1) {
-                  // Append new reasoning content (streaming sends incremental chunks)
-                  session.messages[idx].reasoningContent = (session.messages[idx].reasoningContent || '') + data.reasoning_content;
-                  
-                  // Find the assistant message element
-                  const messageEls = document.querySelectorAll('.message-assistant');
-                  if (messageEls.length > 0) {
-                    const lastAssistantMsg = messageEls[messageEls.length - 1];
-                    
-                    // Check if reasoning section exists
-                    let reasoningSection = lastAssistantMsg.querySelector('.reasoning-section');
-                    let reasoningContentEl;
-                    
-                    if (!reasoningSection) {
-                      // Create reasoning section structure
-                      reasoningSection = document.createElement('div');
-                      reasoningSection.className = 'reasoning-section';
-                      reasoningSection.innerHTML = `
-                        <div class="reasoning-header" onclick="toggleReasoning(this)">
-                          <span class="reasoning-toggle">▶</span>
-                          <span>思考过程</span>
-                        </div>
-                        <div class="reasoning-content"></div>
-                      `;
-                      lastAssistantMsg.insertBefore(reasoningSection, lastAssistantMsg.firstChild);
-                    }
-                    
-                    reasoningContentEl = reasoningSection.querySelector('.reasoning-content');
-                    
-                    if (reasoningContentEl && data.reasoning_content) {
-                      // Append new reasoning content instead of replacing
-                      reasoningContentEl.textContent += data.reasoning_content;
-                    }
+                  const renderedMd = window.marked ? window.marked.parse(state.currentStreamingContent) : escapeHtml(state.currentStreamingContent);
+                  contentDiv.innerHTML = renderedMd;
+                  // Add streaming cursor during active streaming
+                  if (state.isStreaming) {
+                    contentDiv.classList.add('streaming-cursor');
                   }
                 }
               }
+              scrollToBottom();
             }
             
             if (data.done) {
@@ -733,7 +660,7 @@ function updateResponseTime() {
       lastWrapper.appendChild(timeEl);
     }
     
-    timeEl.textContent = `Thinking time : ${seconds}s`;
+    timeEl.textContent = `Response: ${seconds}s`;
   }
 }
 
@@ -844,7 +771,7 @@ function render() {
     <div class="app-container">
       <div class="sidebar">
         <div class="sidebar-header">
-          <button class="new-session-btn">+ New Chat</button>
+          <button class="new-session-btn"> New Chat</button>
         </div>
         <div class="session-list">
           ${sessionIds.map(id => {
@@ -863,29 +790,24 @@ function render() {
         <div class="chat-header">
           <h1>AI Legal Advisor</h1>
           <div class="header-controls">
+            <label class="web-search-label" title="启用后可使用互联网搜索最新法律资讯">
+              <span class="web-search-label-text">联网搜索</span>
+              <label class="toggle-switch">
+                <input type="checkbox" class="web-search-toggle" ${state.enableWebSearch ? 'checked' : ''}>
+                <span class="toggle-slider"></span>
+              </label>
+            </label>
             <label class="control-label">
               Model
               <select class="model-select" ${state.isLoading ? 'disabled' : ''}>
                 ${CONFIG.MODELS.map(m => `<option value="${m.value}" ${state.selectedModel === m.value ? 'selected' : ''}>${m.label}</option>`).join('')}
               </select>
             </label>
-            <label class="control-label">
-              Thinking
-              <select class="thinking-select" ${state.isLoading ? 'disabled' : ''}>
-                ${CONFIG.THINKING_OPTIONS.map(t => `<option value="${t.value}" ${state.thinkingEnabled === t.value ? 'selected' : ''}>${t.label}</option>`).join('')}
-              </select>
-            </label>
-            <label class="control-label">
-              Effort
-              <select class="reasoning-select" ${state.isLoading ? 'disabled' : ''}>
-                ${CONFIG.REASONING_EFFORT.map(r => `<option value="${r.value}" ${state.reasoningEffort === r.value ? 'selected' : ''}>${r.label}</option>`).join('')}
-              </select>
-            </label>
           </div>
         </div>
         <div class="message-list"></div>
-        ${state.isStreaming ? '<div class="loading-indicator">Generating...</div>' : ''}
-        ${!state.isStreaming && state.isLoading ? '<div class="loading-indicator">Thinking...</div>' : ''}
+        ${state.isStreaming ? '<div class="loading-indicator"><span>Generating</span><span class="typing-dots"><span></span><span></span><span></span></span></div>' : ''}
+        ${!state.isStreaming && state.isLoading ? '<div class="loading-indicator"><span>Thinking</span><span class="typing-dots"><span></span><span></span><span></span></span></div>' : ''}
         ${state.error ? `<div class="error-message">${escapeHtml(state.error)}</div>` : ''}
         <div class="input-container">
           <div class="input-area">
@@ -893,7 +815,7 @@ function render() {
             <div class="input-row">
               <button class="upload-btn" onclick="triggerFileUpload()" ${state.isLoading || !state.hasSession ? 'disabled' : ''} title="上传文件">📎</button>
               <input type="text" placeholder="Ask a legal question..." maxlength="${CONFIG.MAX_MESSAGE_LENGTH}" ${state.isLoading || !state.hasSession ? 'disabled' : ''}>
-              <button class="send-btn" ${state.isLoading || !state.hasSession ? 'disabled' : ''}>Send</button>
+              <button class="send-btn" ${state.isLoading || !state.hasSession ? 'disabled' : ''} title="Send"></button>
             </div>
           </div>
           <input type="file" id="file-upload-input" accept="${CONFIG.ALLOWED_FILE_TYPES.join(',')}" onchange="handleFileUpload(this.files)" style="display:none" multiple>
@@ -911,13 +833,30 @@ function render() {
   renderMessages();
 }
 
+// Render welcome screen
+function renderWelcomeScreen() {
+  return `
+    <div class="welcome-screen">
+      <div class="welcome-icon">⚖️</div>
+      <h2>Legal AI Assistant</h2>
+      <p>I can help you with Chinese legal questions — ask about civil law, criminal law, labor disputes, contracts, and more. I search legal databases and the web to find relevant answers.</p>
+      <div class="welcome-suggestions">
+        <span class="suggestion-chip">劳动合同纠纷怎么处理</span>
+        <span class="suggestion-chip">工伤认定标准是什么</span>
+        <span class="suggestion-chip">合同违约责任有哪些</span>
+        <span class="suggestion-chip">民事诉讼法起诉流程</span>
+      </div>
+    </div>
+  `;
+}
+
 // Render messages
 function renderMessages() {
   if (!elements.messageList) return;
 
   const session = getCurrentSession();
   const messages = session ? session.messages : [];
-  
+
   // Also render sidebar sessions if it exists
   const sessionListEl = document.querySelector('.session-list');
   if (sessionListEl) {
@@ -934,66 +873,43 @@ function renderMessages() {
     }).join('');
   }
 
+  // If no messages, show welcome screen
+  if (messages.length === 0) {
+    elements.messageList.innerHTML = renderWelcomeScreen();
+    return;
+  }
+
   elements.messageList.innerHTML = messages.map(msg => {
     const renderedContent = window.marked ? window.marked.parse(msg.content || '') : escapeHtml(msg.content);
-    let thinkingSection = '';
-    
-    // Show thinking content section only for assistant messages when thinking mode is enabled
-    const sessionThinkingEnabled = session ? session.thinkingEnabled : state.thinkingEnabled;
-    if (msg.role === 'assistant' && sessionThinkingEnabled) {
-      const reasoningContent = msg.reasoningContent || '';
-      const escapedThinking = escapeHtml(reasoningContent);
-      thinkingSection = `
-        <div class="reasoning-section">
-          <div class="reasoning-header" onclick="toggleReasoning(this)">
-            <span class="reasoning-toggle">▶</span>
-            <span>思考过程</span>
-          </div>
-          <div class="reasoning-content">${escapedThinking}</div>
-        </div>
-      `;
-    }
 
-    // 显示回答耗时（在气泡外面）
+    // Response time section
     let responseTimeSection = '';
     if (msg.role === 'assistant' && msg.responseTime !== undefined) {
       const seconds = (msg.responseTime / 1000).toFixed(2);
-      responseTimeSection = `<div class="response-time">thinking time : ${seconds}s</div>`;
+      responseTimeSection = `<div class="response-time">${seconds}s</div>`;
     }
-    
-    // 助手消息需要包裹在wrapper中以显示耗时
-    if (msg.role === 'assistant') {
-      return `
-        <div class="message-wrapper message-wrapper-assistant">
-          <div class="message message-assistant">
-            ${thinkingSection}
+
+    // Avatar initials
+    const avatarHtml = msg.role === 'user'
+      ? '<div class="message-avatar avatar-user">You</div>'
+      : '<div class="message-avatar avatar-assistant">AI</div>';
+
+    const bubbleClass = msg.role === 'user' ? 'message-user' : 'message-assistant';
+    const rowClass = msg.role === 'user' ? 'message-row-user' : 'message-row-assistant';
+    const wrapperClass = msg.role === 'user' ? 'message-wrapper-user' : 'message-wrapper-assistant';
+
+    return `
+      <div class="message-wrapper ${wrapperClass}">
+        <div class="message-row ${rowClass}">
+          ${avatarHtml}
+          <div class="message ${bubbleClass}">
             <div class="message-content">${renderedContent}</div>
           </div>
-          ${responseTimeSection}
         </div>
-      `;
-    }
-    
-    // 用户消息保持原样
-    return `
-      <div class="message message-user">
-        <div class="message-content">${renderedContent}</div>
+        ${responseTimeSection}
       </div>
     `;
   }).join('');
-}
-
-// Toggle reasoning section visibility
-function toggleReasoning(headerEl) {
-  const contentEl = headerEl.nextElementSibling;
-  const toggleEl = headerEl.querySelector('.reasoning-toggle');
-  if (contentEl.style.display === 'none') {
-    contentEl.style.display = 'block';
-    toggleEl.style.transform = 'rotate(90deg)';
-  } else {
-    contentEl.style.display = 'none';
-    toggleEl.style.transform = 'rotate(0deg)';
-  }
 }
 
 // Escape HTML to prevent XSS

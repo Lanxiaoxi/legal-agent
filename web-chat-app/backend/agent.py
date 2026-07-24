@@ -5,7 +5,7 @@ from typing import Optional
 from agents import Agent, OpenAIChatCompletionsModel
 
 from config import config
-from tools import TOOLS
+from tools import get_tools
 
 logger = logging.getLogger(__name__)
 
@@ -49,26 +49,28 @@ LEGAL_AGENT_INSTRUCTIONS = """你是一个专业的法律顾问助手。
 - 遇到不确定的问题，坦诚告知并建议咨询专业律师"""
 
 
-def create_legal_agent(model: Optional[OpenAIChatCompletionsModel] = None) -> Agent:
+def create_legal_agent(model: Optional[OpenAIChatCompletionsModel] = None, enable_web_search: bool = True) -> Agent:
     """创建法律助手 Agent
-    
+
     Args:
         model: 可选的模型实例，默认使用配置中的模型
-    
+        enable_web_search: 是否启用联网搜索
+
     Returns:
         配置好的 Agent 实例
     """
     if model is None:
         model = config.get_model()
-    
+
+    tools = get_tools(enable_web_search)
     agent_name = "法律助手"
-    logger.info(f"Creating legal agent with model: {model.model}")
-    
+    logger.info(f"Creating legal agent with model: {model.model}, web_search: {enable_web_search}")
+
     return Agent(
         name=agent_name,
         instructions=LEGAL_AGENT_INSTRUCTIONS,
         model=model,
-        tools=TOOLS,
+        tools=tools,
     )
 
 

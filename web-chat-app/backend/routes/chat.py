@@ -18,9 +18,6 @@ router = APIRouter()
 # 有效模型列表
 VALID_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"]
 
-# Reasoning effort 选项
-REASONING_EFFORT_OPTIONS = ["high", "max", "low"]
-
 
 def validate_chat_request(data: dict) -> tuple[bool, Optional[str]]:
     """验证聊天请求数据
@@ -48,11 +45,6 @@ def validate_chat_request(data: dict) -> tuple[bool, Optional[str]]:
     if model and model not in VALID_MODELS:
         return False, f"Invalid model. Valid models: {', '.join(VALID_MODELS)}"
     
-    # 验证 reasoning_effort
-    reasoning_effort = data.get("reasoning_effort")
-    if reasoning_effort and reasoning_effort not in REASONING_EFFORT_OPTIONS:
-        return False, f"Invalid reasoning_effort. Valid options: {', '.join(REASONING_EFFORT_OPTIONS)}"
-    
     return True, None
 
 
@@ -73,30 +65,28 @@ async def stream_chat_response(
     message: str,
     history: List[dict],
     model: Optional[str] = None,
-    thinking: bool = True,
-    reasoning_effort: str = "high"
+    enable_web_search: bool = True,
 ) -> StreamingResponse:
     """流式返回聊天响应
-    
+
     Args:
         message: 用户消息
         history: 历史消息
         model: 选择的模型
-        thinking: 是否启用思考
-        reasoning_effort: 思考深度
-    
+        enable_web_search: 是否启用联网搜索
+
     Returns:
         SSE 流式响应
     """
-    
+
     async def generate():
         try:
             # 根据选择的模型创建 Agent
             if model and model != config.model:
                 agent_model = config.get_model(model)
-                agent = create_legal_agent(agent_model)
+                agent = create_legal_agent(agent_model, enable_web_search)
             else:
-                agent = create_legal_agent()
+                agent = create_legal_agent(enable_web_search=enable_web_search)
             
             # 将历史消息转换为 Agent 期望的格式
             input_messages = []
@@ -120,7 +110,7 @@ async def stream_chat_response(
                     from openai.types.responses import ResponseTextDeltaEvent
                     if isinstance(event.data, ResponseTextDeltaEvent):
                         content = event.data.delta
-                        yield f'data: {{"content": {json.dumps(content)}, "reasoning_content": "", "done": false}}\n\n'
+                        yield f'data: {{"content": {json.dumps(content)}, "done": false}}\n\n'
                 
                 elif event.type == "tool_call_event":
                     tool_name = getattr(event, 'tool_name', 'unknown')
@@ -151,7 +141,7 @@ async def stream_chat_response(
                     logger.info(f"   [{i}] {call['tool']}: {call.get('result', '无返回')[:100]}...")
             
             # 发送完成信号
-            yield f'data: {{"content": "", "reasoning_content": "", "done": true}}\n\n'
+            yield f'data: {{"content": "", "done": true}}\n\n'
             
         except Exception as e:
             logger.error(f"Error in agent streaming: {e}")
@@ -194,19 +184,18 @@ async def chat(request: Request) -> StreamingResponse:
     message = data["message"]
     history = data.get("history", [])
     model = data.get("model")
-    thinking = data.get("thinking", True)
-    reasoning_effort = data.get("reasoning_effort", "high")
     session_id = data.get("session_id", "")
+    enable_web_search = data.get("enable_web_search", True)
 
     # 设置当前请求的 session_id，供 tool 使用
     if session_id:
         from session_context import current_session_id
         current_session_id.set(session_id)
 
-    logger.info(f"Chat request received - model: {model}, thinking: {thinking}, reasoning_effort: {reasoning_effort}, message_length: {len(message)}, session_id: {session_id}")
-    
+    logger.info(f"Chat request received - model: {model}, message_length: {len(message)}, session_id: {session_id}, web_search: {enable_web_search}")
+
     # 流式响应
-    return await stream_chat_response(message, history, model, thinking, reasoning_effort)
+    return await stream_chat_response(message, history, model, enable_web_search)
 
 
 @router.options("/api/chat")
