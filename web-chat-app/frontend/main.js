@@ -57,11 +57,12 @@ let state = {
   responseTimeInterval: null,  // 定时器ID
   showResponseTime: false,     // 是否开始显示耗时
   selectedModel: CONFIG.MODELS[0].value,
-  enableWebSearch: true,   // 是否启用联网搜索
+  enableWebSearch: false,   // 是否启用联网搜索
   hasSession: true,        // Track if there is an active session
   uploadedFiles: [],        // Current session uploaded files: [{id, name, type, size, chunk_count, created_at}]
   feedbackModalOpen: false,  // 意见反馈弹窗是否打开
   feedbackSubmitting: false, // 是否正在提交反馈
+  donatePopupOpen: false,    // 打赏浮窗是否打开
 };
 
 // Persistent anonymous user ID (stored in localStorage, survives refreshes)
@@ -277,6 +278,10 @@ function handleClick(e) {
     }
   } else if (e.target.classList.contains('feedback-btn')) {
     showFeedbackModal();
+  } else if (e.target.classList.contains('donate-btn') || e.target.closest('.donate-btn')) {
+    toggleDonatePopup(e);
+  } else if (state.donatePopupOpen && !e.target.closest('.donate-popup') && !e.target.closest('.donate-btn')) {
+    closeDonatePopup();
   }
 }
 
@@ -815,7 +820,7 @@ function render() {
       </div>
       <div class="chat-container">
         <div class="chat-header">
-          <h1>AI Legal Advisor</h1>
+          <h1>AI 法律专家助手</h1>
           <div class="header-controls">
             <label class="web-search-label" title="启用后可使用互联网搜索最新法律资讯">
               <span class="web-search-label-text">联网搜索</span>
@@ -831,6 +836,7 @@ function render() {
               </select>
             </label>
             <button class="feedback-btn" title="意见反馈">💬 反馈</button>
+            <button class="donate-btn" title="打赏支持">☕ 打赏</button>
           </div>
         </div>
         <div class="message-list"></div>
@@ -1104,6 +1110,49 @@ async function submitFeedback() {
     if (cancelBtn) cancelBtn.disabled = false;
     showToast(`提交失败: ${error.message}`, 'error');
   }
+}
+
+// ---- Donate Popup ----
+
+function toggleDonatePopup(e) {
+  if (state.donatePopupOpen) {
+    closeDonatePopup();
+    return;
+  }
+
+  // Remove existing popup if any
+  const existing = document.querySelector('.donate-popup');
+  if (existing) existing.remove();
+
+  const btn = e.target.closest('.donate-btn');
+  const popup = document.createElement('div');
+  popup.className = 'donate-popup';
+  popup.innerHTML = `
+    <img src="qrcode.png" alt="打赏二维码" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+    <div class="donate-placeholder" style="display:none;">
+      <div class="donate-placeholder-icon">📷</div>
+      <p>请将二维码图片保存为<br><code>frontend/qrcode.png</code></p>
+    </div>
+    <p class="donate-text">感谢您的支持 ☕</p>
+  `;
+
+  // Position below the button
+  const btnRect = btn.getBoundingClientRect();
+  popup.style.position = 'fixed';
+  popup.style.top = (btnRect.bottom + 8) + 'px';
+  popup.style.right = (window.innerWidth - btnRect.right) + 'px';
+
+  document.body.appendChild(popup);
+  state.donatePopupOpen = true;
+
+  // Prevent immediate close from this click
+  popup.addEventListener('click', function(ev) { ev.stopPropagation(); });
+}
+
+function closeDonatePopup() {
+  state.donatePopupOpen = false;
+  const popup = document.querySelector('.donate-popup');
+  if (popup) popup.remove();
 }
 
 // ---- Toast ----
