@@ -3,6 +3,7 @@ const CONFIG = {
   API_URL: '/api/chat',
   UPLOAD_URL: '/api/upload',
   FILES_URL: '/api/files',
+  FEEDBACK_URL: '/api/feedback',
   MAX_MESSAGE_LENGTH: 5000,
   MAX_HISTORY_MESSAGES: 100,
   STORAGE_KEY: 'chat_sessions',
@@ -58,8 +59,23 @@ let state = {
   selectedModel: CONFIG.MODELS[0].value,
   enableWebSearch: true,   // 是否启用联网搜索
   hasSession: true,        // Track if there is an active session
-  uploadedFiles: []         // Current session uploaded files: [{id, name, type, size, chunk_count, created_at}]
+  uploadedFiles: [],        // Current session uploaded files: [{id, name, type, size, chunk_count, created_at}]
+  feedbackModalOpen: false,  // 意见反馈弹窗是否打开
+  feedbackSubmitting: false, // 是否正在提交反馈
 };
+
+// Persistent anonymous user ID (stored in localStorage, survives refreshes)
+const USER_ID_KEY = 'legal_advisor_user_id';
+
+function getUserId() {
+  let userId = localStorage.getItem(USER_ID_KEY);
+  if (!userId) {
+    userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
+    localStorage.setItem(USER_ID_KEY, userId);
+    console.log('[INFO] New user ID generated:', userId);
+  }
+  return userId;
+}
 
 // Current session convenience getter
 function getCurrentSession() {
@@ -259,6 +275,8 @@ function handleClick(e) {
       elements.input.value = text;
       sendMessage();
     }
+  } else if (e.target.classList.contains('feedback-btn')) {
+    showFeedbackModal();
   }
 }
 
@@ -316,6 +334,7 @@ async function handleFileUpload(fileList) {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('session_id', state.currentSessionId);
+      formData.append('user_id', getUserId());
 
       const response = await fetch(CONFIG.UPLOAD_URL, {
         method: 'POST',
@@ -506,6 +525,7 @@ async function sendMessage() {
         message: fullMessage,
         history,
         session_id: state.currentSessionId,
+        user_id: getUserId(),
         model: state.selectedModel,
         enable_web_search: state.enableWebSearch
       })
@@ -810,6 +830,7 @@ function render() {
                 ${CONFIG.MODELS.map(m => `<option value="${m.value}" ${state.selectedModel === m.value ? 'selected' : ''}>${m.label}</option>`).join('')}
               </select>
             </label>
+            <button class="feedback-btn" title="意见反馈">💬 反馈</button>
           </div>
         </div>
         <div class="message-list"></div>
@@ -963,6 +984,150 @@ function renderMessages() {
       </div>
     `;
   }).join('');
+}
+
+// ---- Feedback Modal ----
+
+function createFeedbackModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3>意见反馈</h3>
+        <button class="modal-close-btn">×</button>
+      </div>
+      <div class="modal-body">
+        <textarea
+          class="feedback-textarea"
+          placeholder="请详细描述您遇到的问题或建议...(什么都可以[吐槽][许愿])"
+          maxlength="5000"
+          rows="6"
+        ></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-cancel-btn">取消</button>
+        <button class="feedback-submit-btn">提交</button>
+      </div>
+    </div>
+  `;
+  return overlay;
+}
+
+function showFeedbackModal() {
+  // Remove existing modal if any
+  const existing = document.querySelector('.modal-overlay');
+  if (existing) existing.remove();
+
+  state.feedbackModalOpen = true;
+  state.feedbackSubmitting = false;
+
+  const modal = createFeedbackModal();
+  document.body.appendChild(modal);
+
+  // Bind events
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal || e.target.classList.contains('modal-close-btn')) {
+      hideFeedbackModal();
+    }
+  });
+
+  const submitBtn = modal.querySelector('.feedback-submit-btn');
+  submitBtn.addEventListener('click', submitFeedback);
+
+  const cancelBtn = modal.querySelector('.modal-cancel-btn');
+  cancelBtn.addEventListener('click', hideFeedbackModal);
+
+  // Close on Escape
+  modal._escHandler = function(e) {
+    if (e.key === 'Escape') hideFeedbackModal();
+  };
+  document.addEventListener('keydown', modal._escHandler);
+
+  // Focus textarea
+  setTimeout(() => {
+    const textarea = modal.querySelector('.feedback-textarea');
+    if (textarea) textarea.focus();
+  }, 100);
+}
+
+function hideFeedbackModal() {
+  state.feedbackModalOpen = false;
+  state.feedbackSubmitting = false;
+
+  const modal = document.querySelector('.modal-overlay');
+  if (modal) {
+    if (modal._escHandler) {
+      document.removeEventListener('keydown', modal._escHandler);
+    }
+    modal.remove();
+  }
+}
+
+async function submitFeedback() {
+  const textarea = document.querySelector('.feedback-textarea');
+  const content = textarea ? textarea.value.trim() : '';
+
+  if (!content) {
+    showToast('请输入反馈内容', 'error');
+    return;
+  }
+
+  state.feedbackSubmitting = true;
+  const submitBtn = document.querySelector('.feedback-submit-btn');
+  const cancelBtn = document.querySelector('.modal-cancel-btn');
+  if (textarea) textarea.disabled = true;
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '提交中...'; }
+  if (cancelBtn) cancelBtn.disabled = true;
+
+  try {
+    const response = await fetch(CONFIG.FEEDBACK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, user_id: getUserId() }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || `提交失败 (${response.status})`);
+    }
+
+    const data = await response.json();
+    console.log('[INFO] Feedback submitted:', data.id);
+    hideFeedbackModal();
+    showToast(data.message || '感谢您的反馈！', 'success');
+  } catch (error) {
+    console.error('[ERROR] Feedback submit failed:', error);
+    state.feedbackSubmitting = false;
+    if (textarea) textarea.disabled = false;
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '提交'; }
+    if (cancelBtn) cancelBtn.disabled = false;
+    showToast(`提交失败: ${error.message}`, 'error');
+  }
+}
+
+// ---- Toast ----
+
+function showToast(message, type = 'success') {
+  // Remove existing toast
+  const existingToast = document.querySelector('.toast');
+  if (existingToast) existingToast.remove();
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+
+  // Trigger animation
+  requestAnimationFrame(() => {
+    toast.classList.add('toast-visible');
+  });
+
+  // Auto remove
+  setTimeout(() => {
+    toast.classList.remove('toast-visible');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
 }
 
 // Escape HTML to prevent XSS

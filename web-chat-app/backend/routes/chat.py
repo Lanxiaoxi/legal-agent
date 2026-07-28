@@ -185,6 +185,7 @@ async def chat(request: Request) -> StreamingResponse:
     history = data.get("history", [])
     model = data.get("model")
     session_id = data.get("session_id", "")
+    user_id = data.get("user_id", "")
     enable_web_search = data.get("enable_web_search", True)
 
     # 设置当前请求的 session_id，供 tool 使用
@@ -192,7 +193,7 @@ async def chat(request: Request) -> StreamingResponse:
         from session_context import current_session_id
         current_session_id.set(session_id)
 
-    logger.info(f"Chat request received - model: {model}, message_length: {len(message)}, session_id: {session_id}, web_search: {enable_web_search}")
+    logger.info(f"Chat request received - model: {model}, message_length: {len(message)}, user: {user_id}, session_id: {session_id}, web_search: {enable_web_search}")
 
     # 流式响应
     return await stream_chat_response(message, history, model, enable_web_search)

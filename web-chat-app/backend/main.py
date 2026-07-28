@@ -51,7 +51,7 @@ app = FastAPI(title="Legal Advisor API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[config.cors_origin],
-    allow_methods=["POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type"]
 )
 
@@ -60,6 +60,9 @@ app.include_router(chat_router)
 
 from routes.upload import router as upload_router
 app.include_router(upload_router)
+
+from routes.feedback import router as feedback_router
+app.include_router(feedback_router)
 
 
 @app.get("/")

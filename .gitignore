@@ -37,6 +37,7 @@ web-chat-app/backend/tools/.cache/
 
 # Uploaded files
 uploads/
+feedback/
 
 # Docs and logs
 doc/

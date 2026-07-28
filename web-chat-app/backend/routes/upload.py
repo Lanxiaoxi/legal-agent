@@ -142,12 +142,14 @@ def _get_session_total_size(session_id: str) -> int:
 async def upload_file(
     file: UploadFile = File(...),
     session_id: str = Form(default=""),
+    user_id: str = Form(default=""),
 ):
     """上传文件并提取文本分块存储
 
     Args:
         file: 上传的文件
         session_id: 会话 ID
+        user_id: 匿名用户 ID
 
     Returns:
         {files: [{file_id, name, type, size, chunk_count, created_at}]}
@@ -221,11 +223,12 @@ async def upload_file(
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     metadata["files"].append(file_info)
+    metadata["user_id"] = user_id or None
     metadata["last_accessed_at"] = datetime.now(timezone.utc).isoformat()
     _save_metadata(session_id, metadata)
 
     logger.info(
-        f"[UPLOAD] session={session_id} file={filename} "
+        f"[UPLOAD] session={session_id} user={user_id} file={filename} "
         f"size={file_size}B chunks={len(chunks)} file_id={file_id}"
     )
 
