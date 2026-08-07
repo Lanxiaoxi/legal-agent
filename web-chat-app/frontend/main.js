@@ -10,7 +10,7 @@ const CONFIG = {
   MAX_RETRIES: 3,
   LOADING_DELAY: 200,
   OPTIMISTIC_UPDATE_DELAY: 100,
-  ALLOWED_FILE_TYPES: ['.txt', '.pdf', '.docx', '.doc'],
+  ALLOWED_FILE_TYPES: ['.txt', '.pdf', '.docx', '.doc', '.jpg', '.jpeg', '.png', '.bmp'],
   MAX_FILE_SIZE_MB: 20,
   MODELS: [
     { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
@@ -423,7 +423,7 @@ function renderFileTags() {
 }
 
 function getFileIcon(type) {
-  const icons = { txt: '📄', pdf: '📑', docx: '📝', doc: '📝' };
+  const icons = { txt: '📄', pdf: '📑', docx: '📝', doc: '📝', jpg: '🖼️', jpeg: '🖼️', png: '🖼️', bmp: '🖼️' };
   return icons[type] || '📎';
 }
 

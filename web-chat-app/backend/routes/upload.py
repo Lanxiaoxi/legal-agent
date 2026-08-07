@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # 支持的文件类型
-ALLOWED_EXTENSIONS = {".txt", ".pdf", ".docx", ".doc"}
+ALLOWED_EXTENSIONS = {".txt", ".pdf", ".docx", ".doc", ".jpg", ".jpeg", ".png", ".bmp"}
 # 单次会话最大总文件大小
 MAX_SESSION_SIZE_MB = 50
 
@@ -120,6 +120,23 @@ def _try_ocr_page(page, page_num: int) -> str:
     return ""
 
 
+def _extract_image_text(file_path: Path) -> str:
+    """从图片中提取文字（通过 OCR）"""
+    doc = fitz.open(str(file_path))  # 图片按单页文档打开
+    try:
+        page = doc[0]
+        # 图片没有文字层，直接 OCR
+        text = _try_ocr_page(page, 1)
+        if not text:
+            raise RuntimeError(
+                f"无法从图片中识别出文字。"
+                "请确认图片包含清晰的文字内容，或已安装 Tesseract OCR。"
+            )
+        return text
+    finally:
+        doc.close()
+
+
 def _extract_text(file_path: Path, ext: str) -> str:
     """从文件中提取纯文本"""
     if ext == ".txt":
@@ -154,6 +171,9 @@ def _extract_text(file_path: Path, ext: str) -> str:
 
     if ext == ".doc":
         return _extract_doc_text(file_path)
+
+    if ext in {".jpg", ".jpeg", ".png", ".bmp"}:
+        return _extract_image_text(file_path)
 
     if ext == ".pdf":
         doc = fitz.open(str(file_path))
