@@ -64,9 +64,6 @@ app.include_router(upload_router)
 from routes.feedback import router as feedback_router
 app.include_router(feedback_router)
 
-from routes.export import router as export_router
-app.include_router(export_router)
-
 
 @app.get("/")
 async def root():

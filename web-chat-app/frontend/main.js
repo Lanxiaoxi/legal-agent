@@ -4,7 +4,6 @@ const CONFIG = {
   UPLOAD_URL: '/api/upload',
   FILES_URL: '/api/files',
   FEEDBACK_URL: '/api/feedback',
-  EXPORT_URL: '/api/export',
   MAX_MESSAGE_LENGTH: 5000,
   MAX_HISTORY_MESSAGES: 100,
   STORAGE_KEY: 'chat_sessions',
@@ -279,9 +278,6 @@ function handleClick(e) {
       elements.input.value = text;
       sendMessage();
     }
-  } else if (e.target.classList.contains('export-word-btn')) {
-    const messageId = e.target.dataset.messageId;
-    exportToWord(messageId);
   } else if (e.target.classList.contains('feedback-btn')) {
     showFeedbackModal();
   } else if (e.target.classList.contains('donate-btn') || e.target.closest('.donate-btn')) {
@@ -412,11 +408,20 @@ function renderFileTags() {
       ${state.uploadedFiles.map(f => {
         const isUploading = f.status === 'uploading';
         const isError = f.status === 'error';
-        const tagClass = isUploading ? 'file-tag file-tag-uploading' : isError ? 'file-tag file-tag-error' : 'file-tag';
-        const title = isError ? `上传失败: ${escapeHtml(f.error || '未知错误')}` : `${escapeHtml(f.name)} (${formatFileSize(f.size)})`;
+        const isGenerated = f.generated === true;
+        const tagClass = isUploading ? 'file-tag file-tag-uploading'
+          : isError ? 'file-tag file-tag-error'
+          : isGenerated ? 'file-tag file-tag-generated'
+          : 'file-tag';
+        const title = isError ? `上传失败: ${escapeHtml(f.error || '未知错误')}`
+          : isGenerated ? `点击下载: ${escapeHtml(f.name)}`
+          : `${escapeHtml(f.name)} (${formatFileSize(f.size)})`;
+        const clickAction = isGenerated
+          ? ` onclick="event.stopPropagation(); downloadFile('${f.id}')"`
+          : '';
         return `
-          <span class="${tagClass}" title="${title}">
-            <span class="file-tag-icon">${isUploading ? '<span class="file-spinner"></span>' : getFileIcon(f.type)}</span>
+          <span class="${tagClass}" title="${title}"${clickAction}>
+            <span class="file-tag-icon">${isUploading ? '<span class="file-spinner"></span>' : isGenerated ? '⬇️' : getFileIcon(f.type)}</span>
             <span class="file-tag-name">${escapeHtml(f.name)}</span>
             ${isUploading ? '' : `<span class="file-tag-remove" onclick="event.stopPropagation(); removeFileTag('${f.id}')">×</span>`}
           </span>
@@ -424,6 +429,45 @@ function renderFileTags() {
       }).join('')}
     </div>
   `;
+}
+
+// Download an AI-generated document file
+async function downloadFile(fileId) {
+  const session = getCurrentSession();
+  if (!session) return;
+
+  try {
+    const response = await fetch(`${CONFIG.FILES_URL}/${session.id}/${fileId}`);
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || `下载失败 (${response.status})`);
+    }
+
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const nameMatch = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+    let downloadName = 'document.docx';
+    if (nameMatch) {
+      try {
+        downloadName = decodeURIComponent(nameMatch[1] || nameMatch[2] || '');
+      } catch (e) {
+        downloadName = nameMatch[2] || 'document.docx';
+      }
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = downloadName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('已开始下载', 'success');
+  } catch (error) {
+    console.error('[ERROR] Download failed:', error);
+    showToast(`下载失败: ${error.message}`, 'error');
+  }
 }
 
 function getFileIcon(type) {
@@ -650,6 +694,9 @@ async function sendMessage() {
               // 实时更新耗时显示
               updateResponseTime();
               finalizeStreamingMessage();
+              // Agent 可能通过工具生成了文档，刷新文件标签区
+              await restoreFileList(state.currentSessionId);
+              render();
             }
             if (data.error) {
               throw new Error(data.error);
@@ -955,57 +1002,6 @@ function renderWelcomeScreen() {
   `;
 }
 
-// Export assistant message content as Word document
-async function exportToWord(messageId) {
-  const session = getCurrentSession();
-  if (!session) return;
-
-  const msg = session.messages.find(m => m.id === messageId);
-  if (!msg || !msg.content) {
-    showToast('无可导出的内容', 'error');
-    return;
-  }
-
-  try {
-    const response = await fetch(CONFIG.EXPORT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ markdown: msg.content, filename: '' })
-    });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.detail || `导出失败 (${response.status})`);
-    }
-
-    // Get suggested filename from Content-Disposition, fallback to derived title
-    let downloadName = '文档.docx';
-    const disposition = response.headers.get('Content-Disposition') || '';
-    const nameMatch = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
-    if (nameMatch) {
-      try {
-        downloadName = decodeURIComponent(nameMatch[1] || nameMatch[2] || '');
-      } catch (e) {
-        downloadName = nameMatch[2] || '文档.docx';
-      }
-    }
-
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = downloadName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    showToast('已下载 Word 文档', 'success');
-  } catch (error) {
-    console.error('[ERROR] Export failed:', error);
-    showToast(`导出失败: ${error.message}`, 'error');
-  }
-}
-
 // Render messages
 function renderMessages() {
   if (!elements.messageList) return;
@@ -1069,11 +1065,6 @@ function renderMessages() {
     const rowClass = msg.role === 'user' ? 'message-row-user' : 'message-row-assistant';
     const wrapperClass = msg.role === 'user' ? 'message-wrapper-user' : 'message-wrapper-assistant';
 
-    // Export button for completed assistant messages
-    const exportBtn = (msg.role === 'assistant' && msg.content)
-      ? `<button class="export-word-btn" data-message-id="${msg.id}" title="下载为 Word 文档">📥 下载 Word</button>`
-      : '';
-
     return `
       <div class="message-wrapper ${wrapperClass}">
         <div class="message-row ${rowClass}">
@@ -1081,7 +1072,6 @@ function renderMessages() {
           <div class="message ${bubbleClass}">
             ${filesSection}
             <div class="message-content">${renderedContent}</div>
-            ${exportBtn}
           </div>
         </div>
         ${responseTimeSection}

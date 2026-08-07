@@ -12,6 +12,7 @@ from typing import Optional
 import docx
 import fitz  # pymupdf
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
 from config import config
 
@@ -421,6 +422,34 @@ async def list_files(session_id: str):
     if not metadata.get("files"):
         return {"files": []}
     return {"files": metadata["files"]}
+
+
+@router.get("/api/files/{session_id}/{file_id}")
+async def download_file(session_id: str, file_id: str):
+    """下载某 session 的指定文件（目前仅支持 AI 生成的 .docx 文档）
+
+    Args:
+        session_id: 会话 ID
+        file_id: 文件 ID
+
+    Returns:
+        文件下载响应
+    """
+    # 查找 AI 生成的文档
+    files_dir = _get_session_dir(session_id) / "files"
+    docx_path = files_dir / f"{file_id}.docx"
+    if not docx_path.exists():
+        raise HTTPException(status_code=404, detail="文件不存在或已过期")
+
+    metadata = _load_metadata(session_id)
+    file_info = next((f for f in metadata.get("files", []) if f.get("id") == file_id), None)
+    download_name = file_info.get("name", f"{file_id}.docx") if file_info else f"{file_id}.docx"
+
+    return FileResponse(
+        path=str(docx_path),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=download_name,
+    )
 
 
 @router.delete("/api/files/{session_id}")
