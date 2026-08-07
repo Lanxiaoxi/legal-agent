@@ -487,12 +487,17 @@ async function restoreFileList(sessionId) {
     const response = await fetch(`${CONFIG.FILES_URL}/${sessionId}`);
     if (response.ok) {
       const data = await response.json();
-      state.uploadedFiles = data.files || [];
-    } else {
+      // 竞态保护：异步请求返回时，如果用户已经切换了会话，丢弃结果
+      if (state.currentSessionId === sessionId) {
+        state.uploadedFiles = data.files || [];
+      }
+    } else if (state.currentSessionId === sessionId) {
       state.uploadedFiles = [];
     }
   } catch (e) {
-    state.uploadedFiles = [];
+    if (state.currentSessionId === sessionId) {
+      state.uploadedFiles = [];
+    }
   }
 }
 
@@ -694,9 +699,13 @@ async function sendMessage() {
               // 实时更新耗时显示
               updateResponseTime();
               finalizeStreamingMessage();
-              // Agent 可能通过工具生成了文档，刷新文件标签区
-              await restoreFileList(state.currentSessionId);
-              render();
+              // Agent 可能通过工具生成了文档，刷新文件标签区。
+              // 捕获当前 sessionId，await 后校验一致性，避免用户已切换会话时误刷新
+              const doneSessionId = state.currentSessionId;
+              await restoreFileList(doneSessionId);
+              if (state.currentSessionId === doneSessionId) {
+                render();
+              }
             }
             if (data.error) {
               throw new Error(data.error);
