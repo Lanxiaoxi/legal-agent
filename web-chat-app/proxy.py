@@ -5,7 +5,6 @@ import os
 import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 # Configuration
@@ -14,40 +13,22 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 app = FastAPI(title="Web Chat App Proxy")
 
-# Serve static files from frontend directory
-@app.get("/")
-async def serve_index():
-    """Serve the main HTML file"""
-    index_path = FRONTEND_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(index_path)
-    return HTMLResponse("<h1>Frontend not found</h1>", status_code=404)
-
-@app.get("/{path:path}")
-async def serve_static(path: str):
-    """Serve static files from frontend directory"""
-    file_path = FRONTEND_DIR / path
-    if file_path.exists() and file_path.is_file():
-        return FileResponse(file_path)
-    # Fallback to index.html for SPA routing
-    index_path = FRONTEND_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(index_path)
-    return HTMLResponse("<h1>Not found</h1>", status_code=404)
-
+# NOTE: /api/* routes MUST be registered BEFORE the static catch-all route.
+# FastAPI matches routes by registration order — the catch-all /{path:path}
+# would otherwise swallow GET /api/* requests and return index.html.
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 async def proxy_api(path: str, request: Request):
     """Proxy API requests to backend"""
     # Build the target URL
     target_url = f"{BACKEND_URL}/api/{path}"
-    
+
     # Get request body
     body = await request.body()
-    
+
     # Get headers (excluding host)
     headers = dict(request.headers)
     headers.pop("host", None)
-    
+
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.request(
@@ -57,7 +38,7 @@ async def proxy_api(path: str, request: Request):
                 headers=headers,
                 follow_redirects=False
             )
-            
+
             # Return the response from backend
             return Response(
                 content=response.content,
@@ -76,6 +57,29 @@ async def proxy_api(path: str, request: Request):
             status_code=500,
             media_type="application/json"
         )
+
+
+# Serve static files from frontend directory
+@app.get("/")
+async def serve_index():
+    """Serve the main HTML file"""
+    index_path = FRONTEND_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return HTMLResponse("<h1>Frontend not found</h1>", status_code=404)
+
+
+@app.get("/{path:path}")
+async def serve_static(path: str):
+    """Serve static files from frontend directory"""
+    file_path = FRONTEND_DIR / path
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(file_path)
+    # Fallback to index.html for SPA routing
+    index_path = FRONTEND_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return HTMLResponse("<h1>Not found</h1>", status_code=404)
 
 
 if __name__ == "__main__":
