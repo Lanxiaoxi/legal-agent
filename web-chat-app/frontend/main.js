@@ -10,7 +10,7 @@ const CONFIG = {
   MAX_RETRIES: 3,
   LOADING_DELAY: 200,
   OPTIMISTIC_UPDATE_DELAY: 100,
-  ALLOWED_FILE_TYPES: ['.txt', '.pdf', '.docx'],
+  ALLOWED_FILE_TYPES: ['.txt', '.pdf', '.docx', '.doc'],
   MAX_FILE_SIZE_MB: 20,
   MODELS: [
     { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
@@ -59,7 +59,8 @@ let state = {
   selectedModel: CONFIG.MODELS[0].value,
   enableWebSearch: false,   // 是否启用联网搜索
   hasSession: true,        // Track if there is an active session
-  uploadedFiles: [],        // Current session uploaded files: [{id, name, type, size, chunk_count, created_at}]
+  uploadedFiles: [],        // Current session uploaded files: [{id, name, type, size, chunk_count, created_at, status}]
+  isUploading: false,       // Whether file upload is in progress
   feedbackModalOpen: false,  // 意见反馈弹窗是否打开
   feedbackSubmitting: false, // 是否正在提交反馈
   donatePopupOpen: false,    // 打赏浮窗是否打开
@@ -164,6 +165,7 @@ function createNewSession() {
   };
   state.currentSessionId = sessionId;
   state.hasSession = true;
+  state.uploadedFiles = [];
   saveHistory();
   return sessionId;
 }
@@ -243,7 +245,7 @@ function setupEventListeners() {
     e.preventDefault();
     const inputArea = document.querySelector('.input-area');
     if (inputArea) inputArea.classList.remove('drag-over');
-    if (e.dataTransfer.files.length > 0) {
+    if (e.dataTransfer.files.length > 0 && !state.isUploading) {
       handleFileUpload(e.dataTransfer.files);
     }
   });
@@ -314,7 +316,7 @@ function triggerFileUpload() {
 
 // Handle file selection from input or drag-and-drop
 async function handleFileUpload(fileList) {
-  if (!state.hasSession) return;
+  if (!state.hasSession || state.isUploading) return;
 
   const files = Array.from(fileList);
   if (files.length === 0) return;
@@ -334,7 +336,25 @@ async function handleFileUpload(fileList) {
 
   setError(null);
 
-  for (const file of files) {
+  // Create placeholder entries with 'uploading' status for immediate feedback
+  const placeholders = files.map((file, i) => ({
+    id: `_uploading_${Date.now()}_${i}`,
+    name: file.name,
+    type: file.name.split('.').pop().toLowerCase(),
+    size: file.size,
+    status: 'uploading'
+  }));
+
+  // Show placeholders immediately
+  state.uploadedFiles = [...state.uploadedFiles, ...placeholders];
+  state.isUploading = true;
+  render();
+
+  // Upload sequentially, updating each entry as it completes
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const entry = placeholders[i];
+
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -352,14 +372,25 @@ async function handleFileUpload(fileList) {
       }
 
       const data = await response.json();
-      state.uploadedFiles = data.files || [];
-      console.log('[INFO] File uploaded:', file.name, '→', state.uploadedFiles.length, 'files in session');
+      // Server returns all files for this session; mark them as done
+      const serverFiles = (data.files || []).map(f => ({ ...f, status: 'done' }));
+      // Combine: all server-confirmed files + remaining placeholders
+      state.uploadedFiles = [...serverFiles, ...placeholders.slice(i + 1)];
+      console.log('[INFO] File uploaded:', file.name, '→', serverFiles.length, 'files in session');
     } catch (error) {
       console.error('[ERROR] File upload failed:', error);
-      setError(`文件上传失败: ${error.message}`);
+      entry.status = 'error';
+      entry.error = error.message;
+      // Rebuild: keep successfully uploaded files + this error entry + remaining placeholders
+      const doneFiles = state.uploadedFiles.filter(f => f.status === 'done');
+      state.uploadedFiles = [...doneFiles, entry, ...placeholders.slice(i + 1)];
     }
+
+    // Re-render after each file to update its status in the UI
+    render();
   }
 
+  state.isUploading = false;
   render();
 }
 
@@ -374,19 +405,25 @@ function renderFileTags() {
   if (!state.uploadedFiles || state.uploadedFiles.length === 0) return '';
   return `
     <div class="file-tags">
-      ${state.uploadedFiles.map(f => `
-        <span class="file-tag" title="${escapeHtml(f.name)} (${formatFileSize(f.size)})">
-          <span class="file-tag-icon">${getFileIcon(f.type)}</span>
-          <span class="file-tag-name">${escapeHtml(f.name)}</span>
-          <span class="file-tag-remove" onclick="event.stopPropagation(); removeFileTag('${f.id}')">×</span>
-        </span>
-      `).join('')}
+      ${state.uploadedFiles.map(f => {
+        const isUploading = f.status === 'uploading';
+        const isError = f.status === 'error';
+        const tagClass = isUploading ? 'file-tag file-tag-uploading' : isError ? 'file-tag file-tag-error' : 'file-tag';
+        const title = isError ? `上传失败: ${escapeHtml(f.error || '未知错误')}` : `${escapeHtml(f.name)} (${formatFileSize(f.size)})`;
+        return `
+          <span class="${tagClass}" title="${title}">
+            <span class="file-tag-icon">${isUploading ? '<span class="file-spinner"></span>' : getFileIcon(f.type)}</span>
+            <span class="file-tag-name">${escapeHtml(f.name)}</span>
+            ${isUploading ? '' : `<span class="file-tag-remove" onclick="event.stopPropagation(); removeFileTag('${f.id}')">×</span>`}
+          </span>
+        `;
+      }).join('')}
     </div>
   `;
 }
 
 function getFileIcon(type) {
-  const icons = { txt: '📄', pdf: '📑', docx: '📝' };
+  const icons = { txt: '📄', pdf: '📑', docx: '📝', doc: '📝' };
   return icons[type] || '📎';
 }
 
@@ -847,7 +884,7 @@ function render() {
           <div class="input-area">
             ${state.hasSession ? renderFileTags() : ''}
             <div class="input-row">
-              <button class="upload-btn" onclick="triggerFileUpload()" ${state.isLoading || !state.hasSession ? 'disabled' : ''} title="上传文件">📎</button>
+              <button class="upload-btn" onclick="triggerFileUpload()" ${state.isLoading || state.isUploading || !state.hasSession ? 'disabled' : ''} title="上传文件">📎</button>
               <input type="text" placeholder="Ask a legal question..." maxlength="${CONFIG.MAX_MESSAGE_LENGTH}" ${state.isLoading || !state.hasSession ? 'disabled' : ''}>
               <button class="send-btn" ${state.isLoading || !state.hasSession ? 'disabled' : ''} title="Send"></button>
             </div>
