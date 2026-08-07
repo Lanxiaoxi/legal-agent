@@ -4,6 +4,7 @@ const CONFIG = {
   UPLOAD_URL: '/api/upload',
   FILES_URL: '/api/files',
   FEEDBACK_URL: '/api/feedback',
+  EXPORT_URL: '/api/export',
   MAX_MESSAGE_LENGTH: 5000,
   MAX_HISTORY_MESSAGES: 100,
   STORAGE_KEY: 'chat_sessions',
@@ -278,6 +279,9 @@ function handleClick(e) {
       elements.input.value = text;
       sendMessage();
     }
+  } else if (e.target.classList.contains('export-word-btn')) {
+    const messageId = e.target.dataset.messageId;
+    exportToWord(messageId);
   } else if (e.target.classList.contains('feedback-btn')) {
     showFeedbackModal();
   } else if (e.target.classList.contains('donate-btn') || e.target.closest('.donate-btn')) {
@@ -951,6 +955,57 @@ function renderWelcomeScreen() {
   `;
 }
 
+// Export assistant message content as Word document
+async function exportToWord(messageId) {
+  const session = getCurrentSession();
+  if (!session) return;
+
+  const msg = session.messages.find(m => m.id === messageId);
+  if (!msg || !msg.content) {
+    showToast('无可导出的内容', 'error');
+    return;
+  }
+
+  try {
+    const response = await fetch(CONFIG.EXPORT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markdown: msg.content, filename: '' })
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || `导出失败 (${response.status})`);
+    }
+
+    // Get suggested filename from Content-Disposition, fallback to derived title
+    let downloadName = '文档.docx';
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const nameMatch = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+    if (nameMatch) {
+      try {
+        downloadName = decodeURIComponent(nameMatch[1] || nameMatch[2] || '');
+      } catch (e) {
+        downloadName = nameMatch[2] || '文档.docx';
+      }
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = downloadName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('已下载 Word 文档', 'success');
+  } catch (error) {
+    console.error('[ERROR] Export failed:', error);
+    showToast(`导出失败: ${error.message}`, 'error');
+  }
+}
+
 // Render messages
 function renderMessages() {
   if (!elements.messageList) return;
@@ -1014,6 +1069,11 @@ function renderMessages() {
     const rowClass = msg.role === 'user' ? 'message-row-user' : 'message-row-assistant';
     const wrapperClass = msg.role === 'user' ? 'message-wrapper-user' : 'message-wrapper-assistant';
 
+    // Export button for completed assistant messages
+    const exportBtn = (msg.role === 'assistant' && msg.content)
+      ? `<button class="export-word-btn" data-message-id="${msg.id}" title="下载为 Word 文档">📥 下载 Word</button>`
+      : '';
+
     return `
       <div class="message-wrapper ${wrapperClass}">
         <div class="message-row ${rowClass}">
@@ -1021,6 +1081,7 @@ function renderMessages() {
           <div class="message ${bubbleClass}">
             ${filesSection}
             <div class="message-content">${renderedContent}</div>
+            ${exportBtn}
           </div>
         </div>
         ${responseTimeSection}
