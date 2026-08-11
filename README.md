@@ -190,6 +190,7 @@ PDF 上传后由 [services/pdf_routing.py](web-chat-app/backend/services/pdf_rou
 | `POST` | `/api/upload` | 上传文件（multipart: file + session_id） |
 | `GET` | `/api/files/{session_id}` | 获取会话的已上传文件列表 |
 | `DELETE` | `/api/files/{session_id}` | 清理会话的上传文件 |
+| `DELETE` | `/api/files/{session_id}/{file_id}` | 删除会话中的指定文件（上传分块或 AI 生成的文档） |
 | `GET` | `/` | 健康检查 |
 
 ## 注意事项

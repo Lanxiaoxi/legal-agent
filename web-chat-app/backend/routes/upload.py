@@ -343,6 +343,45 @@ async def delete_files(session_id: str):
     return {"status": "ok", "message": "Files cleaned up"}
 
 
+@router.delete("/api/files/{session_id}/{file_id}")
+async def delete_file(session_id: str, file_id: str):
+    """删除某 session 的指定文件（上传的文本分块或 AI 生成的文档）
+
+    Args:
+        session_id: 会话 ID
+        file_id: 文件 ID
+
+    Returns:
+        {files: 删除后剩余的该会话文件列表}
+    """
+    metadata = _load_metadata(session_id)
+    files = metadata.get("files", [])
+    file_info = next((f for f in files if f.get("id") == file_id), None)
+    if not file_info:
+        raise HTTPException(status_code=404, detail="文件不存在或已过期")
+
+    session_dir = _get_session_dir(session_id)
+    if file_info.get("generated"):
+        # AI 生成的 Word 文档
+        docx_path = session_dir / "files" / f"{file_id}.docx"
+        if docx_path.exists():
+            docx_path.unlink(missing_ok=True)
+    else:
+        # 上传文件的分块
+        chunks_dir = _get_chunks_dir(session_id)
+        if chunks_dir.exists():
+            for chunk_path in chunks_dir.glob(f"{file_id}_*.txt"):
+                chunk_path.unlink(missing_ok=True)
+
+    # 从元数据移除
+    metadata["files"] = [f for f in files if f.get("id") != file_id]
+    metadata["last_accessed_at"] = datetime.now(timezone.utc).isoformat()
+    _save_metadata(session_id, metadata)
+
+    logger.info(f"[DELETE] session={session_id} file={file_id} name={file_info.get('name')}")
+    return {"files": metadata["files"]}
+
+
 # ---------- TTL 清理 ----------
 
 

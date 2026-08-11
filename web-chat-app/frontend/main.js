@@ -398,9 +398,24 @@ async function handleFileUpload(fileList) {
   render();
 }
 
-// Remove file tag (only from UI state, backend files are kept for conversation context)
-function removeFileTag(fileId) {
-  state.uploadedFiles = state.uploadedFiles.filter(f => f.id !== fileId);
+// Remove file tag: 真实删除后端文件（分块 + metadata），不只移除 UI
+async function removeFileTag(fileId) {
+  const sessionId = state.currentSessionId;
+  if (!sessionId) return;
+
+  try {
+    const response = await fetch(`${CONFIG.FILES_URL}/${sessionId}/${fileId}`, { method: 'DELETE' });
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || `删除失败 (${response.status})`);
+    }
+    // 以后端返回的文件列表为准
+    const data = await response.json();
+    state.uploadedFiles = (data.files || []).map(f => ({ ...f, status: 'done' }));
+  } catch (error) {
+    console.error('[ERROR] File delete failed:', error);
+    setError(`删除文件失败: ${error.message}`);
+  }
   render();
 }
 
@@ -974,7 +989,7 @@ function renderWelcomeScreen() {
     <div class="welcome-screen">
       <div class="welcome-icon">⚖️</div>
       <h2>Legal AI Assistant</h2>
-      <p>I can help you with Chinese legal questions — ask about civil law, criminal law, labor disputes, contracts, and more.</p>
+      <p>我可以帮你解答中国法律问题——涵盖民法、刑法、劳动纠纷、合同等领域。</p>
       <div class="welcome-categories">
         <div class="welcome-category">
           <div class="category-header">
@@ -993,10 +1008,10 @@ function renderWelcomeScreen() {
             <span class="category-title">问一问</span>
           </div>
           <div class="category-chips">
-            <span class="suggestion-chip">劳动合同纠纷怎么处理</span>
-            <span class="suggestion-chip">工伤认定标准是什么</span>
-            <span class="suggestion-chip">合同违约责任有哪些</span>
-            <span class="suggestion-chip">民事诉讼法起诉流程</span>
+            <span class="suggestion-chip">劳动合同纠纷怎么维权</span>
+            <span class="suggestion-chip">工伤认定标准是什么，怎么申请赔付</span>
+            <span class="suggestion-chip">合同违约会承担什么责任</span>
+            <span class="suggestion-chip">民事诉讼法起诉应该怎么做</span>
           </div>
         </div>
         <div class="welcome-category">
@@ -1006,8 +1021,8 @@ function renderWelcomeScreen() {
           </div>
           <div class="category-chips">
             <span class="suggestion-chip">帮我审阅这份文件的错漏</span>
-            <span class="suggestion-chip">起草一份保密协议</span>
-            <span class="suggestion-chip">帮我修改这份劳动合同</span>
+            <span class="suggestion-chip">起草一份借贷协议</span>
+            <span class="suggestion-chip">帮我完善这份劳动合同</span>
           </div>
         </div>
       </div>
