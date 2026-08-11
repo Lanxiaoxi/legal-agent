@@ -28,19 +28,29 @@ MAX_SESSION_SIZE_MB = 50
 
 def _extract_image_text(file_path: Path) -> str:
     """从图片中提取文字（通过 OCR）"""
-    doc = fitz.open(str(file_path))  # 图片按单页文档打开
+    # 图片没有文字层，直接 OCR。
+    # 注意：PyMuPDF 的 get_textpage_ocr 只支持 PDF 文档，图片需先转为单页 PDF 再识别，
+    # 否则会报 "source or target not a PDF"。
+    img_doc = fitz.open(str(file_path))  # 图片按单页文档打开
     try:
-        page = doc[0]
-        # 图片没有文字层，直接 OCR
-        text = try_ocr_page(page, 1)
-        if not text:
-            raise RuntimeError(
-                f"无法从图片中识别出文字。"
-                "请确认图片包含清晰的文字内容，或已安装 Tesseract OCR。"
-            )
-        return text
+        pix = img_doc[0].get_pixmap()
     finally:
-        doc.close()
+        img_doc.close()
+
+    pdf_doc = fitz.open()  # 空的内存 PDF
+    try:
+        page = pdf_doc.new_page(width=pix.width, height=pix.height)
+        page.insert_image(fitz.Rect(0, 0, pix.width, pix.height), pixmap=pix)
+        text = try_ocr_page(page, 1)
+    finally:
+        pdf_doc.close()
+
+    if not text:
+        raise RuntimeError(
+            f"无法从图片中识别出文字。"
+            "请确认图片包含清晰的文字内容，或已安装 Tesseract OCR。"
+        )
+    return text
 
 
 def _extract_text(file_path: Path, ext: str) -> tuple[str, dict]:
