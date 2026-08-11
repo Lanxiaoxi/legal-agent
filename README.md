@@ -32,7 +32,9 @@ web-chat-app/
 │   ├── config.py                # 配置管理（环境变量 + config.json）
 │   ├── config.json              # 配置文件
 │   ├── session_context.py       # 请求链路 session_id 上下文（contextvars）
-│   ├── pdf_routing.py           # PDF 四路页面级分流提取（A/B/C/D + 回退）
+│   ├── services/                # 文档处理服务（被 routes/tools 复用）
+│   │   ├── pdf_routing.py       # PDF 四路页面级分流提取（A/B/C/D + 回退）
+│   │   └── doc_converter.py     # markdown → Word (docx) 转换
 │   ├── routes/
 │   │   ├── chat.py              # 聊天 API 路由（SSE 流式响应）
 │   │   └── upload.py            # 文件上传/列表/删除 API + TTL 清理任务
@@ -43,7 +45,7 @@ web-chat-app/
 │   │   ├── fetch_webpage.py     # 网页抓取
 │   │   ├── get_current_datetime.py  # 获取当前时间
 │   │   └── search_uploaded_file.py  # 已上传文件内容检索
-│   └── legal_konwlegde/         # 法律知识库（JSON 格式）
+│   └── legal_knowledge/         # 法律知识库（JSON 格式）
 │       ├── legal_docs_index.json    # 法律索引
 │       └── *.json               # 各法律的结构化条款数据
 ├── frontend/
@@ -145,7 +147,7 @@ web-chat-app/
 
 ## PDF 处理架构（四路页面级分流）
 
-PDF 上传后由 [pdf_routing.py](web-chat-app/backend/pdf_routing.py) 按**页面级**四路分流提取，取各引擎长处：
+PDF 上传后由 [services/pdf_routing.py](web-chat-app/backend/services/pdf_routing.py) 按**页面级**四路分流提取，取各引擎长处：
 
 | 路由 | 触发条件 | 提取器 | 产出 |
 |------|----------|--------|------|

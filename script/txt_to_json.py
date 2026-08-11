@@ -216,7 +216,7 @@ if __name__ == "__main__":
     import glob
     
     doc_dir = r"c:\Users\echuzhi\repo\legal-agent\doc"
-    output_dir = r"c:\Users\echuzhi\repo\legal-agent\web-chat-app\backend\legal_konwlegde"
+    output_dir = r"c:\Users\echuzhi\repo\legal-agent\web-chat-app\backend\legal_knowledge"
     
     # 处理所有txt文件
     txt_files = glob.glob(f"{doc_dir}/*.txt")

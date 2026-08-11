@@ -8,7 +8,7 @@ from pathlib import Path
 from agents import function_tool
 
 from config import config
-from doc_converter import markdown_to_docx, pandoc_available
+from services.doc_converter import markdown_to_docx, pandoc_available
 from session_context import current_session_id
 
 logger = logging.getLogger(__name__)

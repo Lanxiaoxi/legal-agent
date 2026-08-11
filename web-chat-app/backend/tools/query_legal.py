@@ -10,7 +10,7 @@ from agents import function_tool
 logger = logging.getLogger(__name__)
 
 # 法律文档目录
-LEGAL_DIR = Path(__file__).parent.parent / "legal_konwlegde"
+LEGAL_DIR = Path(__file__).parent.parent / "legal_knowledge"
 INDEX_FILE = LEGAL_DIR / "legal_docs_index.json"
 
 # 缓存法律数据

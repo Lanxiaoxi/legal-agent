@@ -12,7 +12,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from config import config
-from pdf_routing import extract_pdf_text, try_ocr_page
+from services.pdf_routing import extract_pdf_text, try_ocr_page
 
 logger = logging.getLogger(__name__)
 
