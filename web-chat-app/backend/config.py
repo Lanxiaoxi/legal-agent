@@ -25,6 +25,7 @@ class Config:
     upload_dir: str = "./uploads"
     upload_max_size_mb: int = 20
     upload_ttl_days: int = 7
+    use_pdf_routing: bool = True
 
     # 内部缓存的客户端和模型实例
     _deepseek_client: Optional[AsyncOpenAI] = None
@@ -63,7 +64,8 @@ def load_config() -> Config:
         "max_history_messages": int(os.getenv("MAX_HISTORY_MESSAGES", "20")),
         "upload_dir": os.getenv("UPLOAD_DIR", "./uploads"),
         "upload_max_size_mb": int(os.getenv("UPLOAD_MAX_SIZE_MB", "20")),
-        "upload_ttl_days": int(os.getenv("UPLOAD_TTL_DAYS", "7"))
+        "upload_ttl_days": int(os.getenv("UPLOAD_TTL_DAYS", "7")),
+        "use_pdf_routing": os.getenv("USE_PDF_ROUTING", "1").lower() not in ("0", "false", "no")
     }
     
     # 如果 API key 不在环境变量，尝试从 config.json 加载
@@ -86,6 +88,7 @@ def load_config() -> Config:
                 config_data["upload_dir"] = file_config.get("uploadDir", config_data["upload_dir"])
                 config_data["upload_max_size_mb"] = file_config.get("uploadMaxSizeMb", config_data["upload_max_size_mb"])
                 config_data["upload_ttl_days"] = file_config.get("uploadTtlDays", config_data["upload_ttl_days"])
+                config_data["use_pdf_routing"] = file_config.get("usePdfRouting", config_data["use_pdf_routing"])
         except Exception as e:
             logger.error(f"Failed to load config.json: {e}")
     

@@ -32,6 +32,7 @@ web-chat-app/
 │   ├── config.py                # 配置管理（环境变量 + config.json）
 │   ├── config.json              # 配置文件
 │   ├── session_context.py       # 请求链路 session_id 上下文（contextvars）
+│   ├── pdf_routing.py           # PDF 四路页面级分流提取（A/B/C/D + 回退）
 │   ├── routes/
 │   │   ├── chat.py              # 聊天 API 路由（SSE 流式响应）
 │   │   └── upload.py            # 文件上传/列表/删除 API + TTL 清理任务
@@ -140,6 +141,23 @@ web-chat-app/
 | uploadDir | UPLOAD_DIR | ./uploads | 文件上传存储目录 |
 | uploadMaxSizeMb | UPLOAD_MAX_SIZE_MB | 20 | 单文件最大大小（MB） |
 | uploadTtlDays | UPLOAD_TTL_DAYS | 7 | 上传文件保留天数（过期自动清理） |
+| usePdfRouting | USE_PDF_ROUTING | true | PDF 四路分流提取（关闭则回退 PyMuPDF+OCR） |
+
+## PDF 处理架构（四路页面级分流）
+
+PDF 上传后由 [pdf_routing.py](web-chat-app/backend/pdf_routing.py) 按**页面级**四路分流提取，取各引擎长处：
+
+| 路由 | 触发条件 | 提取器 | 产出 |
+|------|----------|--------|------|
+| A | 常规文字页 | pdf-inspector | Markdown（表格/标题/阅读顺序还原） |
+| B | 表单页（有填写值） | pdf-inspector 坐标 | 字段标签↔填写值配对 |
+| C | 编码损坏页（`garbled`） | PyMuPDF | 平铺文本（坏字库更稳） |
+| D | 扫描页（`scanned`） | Tesseract OCR | OCR 文本（需安装 tesseract） |
+
+- **文档级**决定内容类型（表单 vs 规整文档），**页面级**决定可行性（编码/扫描），混合文档可同时走多条路（如 `A×10 + D×4`）
+- 路由结果写入 `metadata.json` 的 `extract_mode` / `route_summary` 字段
+- pdf-inspector 未安装、被禁用（`usePdfRouting=false`）或处理失败时，自动回退原有 PyMuPDF + OCR 逻辑
+- B 路的字段配对让 `search_uploaded_file` 能检索到"字段→值"级别的信息（如按护照号/合同编号检索）
 
 ## 法律工具
 

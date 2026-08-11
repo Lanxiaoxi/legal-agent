@@ -12,6 +12,7 @@ dependencies = [
     "python-multipart>=0.0.6",
     "python-docx>=0.8.11",
     "pymupdf>=1.23.0",
+    "pdf-inspector>=0.2.7",
 ]
 
 [project.optional-dependencies]

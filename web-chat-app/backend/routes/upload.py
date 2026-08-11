@@ -1,13 +1,10 @@
 """文件上传路由模块"""
 import json
 import logging
-import re
 import shutil
-import subprocess
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 import docx
 import fitz  # pymupdf
@@ -15,110 +12,18 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from config import config
+from pdf_routing import extract_pdf_text, try_ocr_page
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 # 支持的文件类型
-ALLOWED_EXTENSIONS = {".txt", ".pdf", ".docx", ".doc", ".jpg", ".jpeg", ".png", ".bmp"}
+ALLOWED_EXTENSIONS = {".txt", ".pdf", ".docx", ".jpg", ".jpeg", ".png", ".bmp"}
 # 单次会话最大总文件大小
 MAX_SESSION_SIZE_MB = 50
 
-# ---------- LibreOffice 路径检测 ----------
-
-_LO_PATH: Optional[str] = None
-
-
-def _find_libreoffice() -> Optional[str]:
-    """查找 LibreOffice 可执行文件路径"""
-    global _LO_PATH
-    if _LO_PATH is not None:
-        return _LO_PATH
-
-    candidates = [
-        "libreoffice",
-        "soffice",
-        # Windows 常见路径
-        r"C:\Program Files\LibreOffice\program\soffice.exe",
-        r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-        # macOS
-        "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-    ]
-    for candidate in candidates:
-        if shutil.which(candidate) or Path(candidate).exists():
-            _LO_PATH = candidate
-            logger.info(f"LibreOffice found at: {candidate}")
-            return candidate
-    return None
-
-
 # ---------- 文本提取 ----------
-
-
-def _extract_doc_text(file_path: Path) -> str:
-    """从 .doc 文件中提取文本（通过 LibreOffice 转换）"""
-    lo = _find_libreoffice()
-    if not lo:
-        raise RuntimeError(
-            "需要 LibreOffice 来解析 .doc 文件（旧版 Word 格式）。"
-            "请安装 LibreOffice: https://www.libreoffice.org/download/"
-        )
-
-    out_dir = file_path.parent
-    result = subprocess.run(
-        [lo, "--headless", "--convert-to", "txt:Text",
-         "--outdir", str(out_dir), str(file_path)],
-        capture_output=True, text=True, timeout=60,
-    )
-    if result.returncode != 0:
-        stderr = result.stderr.strip() or result.stdout.strip() or "unknown error"
-        raise RuntimeError(f"LibreOffice 转换失败: {stderr}")
-
-    # LibreOffice 输出文件名: 原文件名.txt
-    txt_path = file_path.with_suffix(".txt")
-    if not txt_path.exists():
-        raise RuntimeError("LibreOffice 转换后未生成文本文件")
-
-    text = txt_path.read_text(encoding="utf-8", errors="replace")
-    txt_path.unlink(missing_ok=True)  # 清理临时 txt
-    return text
-
-
-# ---------- OCR ----------
-
-_OCR_CHECKED: Optional[bool] = None
-
-
-def _tesseract_available() -> bool:
-    """检测 Tesseract OCR 是否可用"""
-    global _OCR_CHECKED
-    if _OCR_CHECKED is not None:
-        return _OCR_CHECKED
-    _OCR_CHECKED = shutil.which("tesseract") is not None
-    if _OCR_CHECKED:
-        logger.info("Tesseract OCR detected")
-    else:
-        logger.info("Tesseract not found — PDF scanned pages will be skipped")
-    return _OCR_CHECKED
-
-
-def _try_ocr_page(page, page_num: int) -> str:
-    """对单页 PDF 尝试 OCR，返回识别文字或空字符串"""
-    if not _tesseract_available():
-        return ""
-
-    try:
-        # 中文为主 + 英文为辅；dpi=300 平衡速度和精度
-        tp = page.get_textpage_ocr(flags=3, language="chi_sim+eng", dpi=300)
-        text = page.get_text(textpage=tp)
-        if text.strip():
-            logger.info(f"OCR: page {page_num} → {len(text)} chars")
-            return text
-    except Exception as e:
-        logger.warning(f"OCR failed on page {page_num}: {e}")
-
-    return ""
 
 
 def _extract_image_text(file_path: Path) -> str:
@@ -127,7 +32,7 @@ def _extract_image_text(file_path: Path) -> str:
     try:
         page = doc[0]
         # 图片没有文字层，直接 OCR
-        text = _try_ocr_page(page, 1)
+        text = try_ocr_page(page, 1)
         if not text:
             raise RuntimeError(
                 f"无法从图片中识别出文字。"
@@ -138,8 +43,11 @@ def _extract_image_text(file_path: Path) -> str:
         doc.close()
 
 
-def _extract_text(file_path: Path, ext: str) -> str:
-    """从文件中提取纯文本"""
+def _extract_text(file_path: Path, ext: str) -> tuple[str, dict]:
+    """从文件中提取纯文本，返回 (text, extra)
+
+    extra: PDF 时包含 route_summary / routed 信息，其余类型为空 dict
+    """
     if ext == ".txt":
         text = file_path.read_text(encoding="utf-8", errors="replace")
         if not text.strip():
@@ -152,7 +60,7 @@ def _extract_text(file_path: Path, ext: str) -> str:
                         break
                 except (UnicodeDecodeError, LookupError):
                     continue
-        return text
+        return text, {}
 
     if ext == ".docx":
         doc = docx.Document(str(file_path))
@@ -168,58 +76,17 @@ def _extract_text(file_path: Path, ext: str) -> str:
                     text = cell.text.strip()
                     if text:
                         paragraphs.append(text)
-        return "\n".join(paragraphs)
-
-    if ext == ".doc":
-        return _extract_doc_text(file_path)
+        return "\n".join(paragraphs), {}
 
     if ext in {".jpg", ".jpeg", ".png", ".bmp"}:
-        return _extract_image_text(file_path)
+        return _extract_image_text(file_path), {}
 
     if ext == ".pdf":
-        doc = fitz.open(str(file_path))
-        total_pages = len(doc)
-        text_pages = []
-        image_only_pages = []
-        ocr_used = False
+        # 四路页面级分流（pdf-inspector），失败/禁用时自动回退 PyMuPDF + OCR
+        result = extract_pdf_text(file_path, config.use_pdf_routing)
+        return result.text, {"route_summary": result.route_summary, "routed": result.routed}
 
-        for i, page in enumerate(doc, 1):
-            text = page.get_text()
-            if text.strip():
-                text_pages.append((i, text.strip()))
-            else:
-                # 无文字层，尝试 OCR 兜底
-                ocr_text = _try_ocr_page(page, i)
-                if ocr_text:
-                    text_pages.append((i, ocr_text))
-                    ocr_used = True
-                else:
-                    image_only_pages.append(i)
-        doc.close()
-
-        if not text_pages:
-            # 全部为图片页且 OCR 不可用/失败
-            raise RuntimeError(
-                f"PDF 全部 {total_pages} 页均为扫描图片，无法提取文字。"
-                "请安装 Tesseract OCR 后重试，或使用 Adobe Acrobat / WPS 先进行文字识别。"
-                f"\n安装方法: apt install tesseract-ocr tesseract-ocr-chi-sim  (Linux)"
-                f"\n或下载: https://github.com/UB-Mannheim/tesseract/wiki (Windows)"
-            )
-
-        if image_only_pages:
-            logger.info(
-                f"PDF '{file_path.name}': {len(text_pages)}/{total_pages} 页有文字"
-                f"（{'含 OCR ' if ocr_used else ''}），"
-                f"第 {image_only_pages} 页无文字已跳过"
-            )
-        elif ocr_used:
-            logger.info(
-                f"PDF '{file_path.name}': 全部 {total_pages} 页通过 OCR 识别完成"
-            )
-
-        return "\n\n".join(text for _, text in text_pages)
-
-    return ""
+    return "", {}
 
 
 # ---------- 分块 ----------
@@ -322,6 +189,14 @@ async def upload_file(
     # 验证文件扩展名
     filename = file.filename or "unknown"
     ext = Path(filename).suffix.lower()
+
+    # .doc 旧版格式不再支持，引导用户转换
+    if ext == ".doc":
+        raise HTTPException(
+            status_code=400,
+            detail="暂不支持 .doc 格式，请先用 Word / WPS 将文档另存为 .docx 后再上传。"
+        )
+
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
@@ -360,14 +235,14 @@ async def upload_file(
 
     try:
         # 提取文本
-        text = _extract_text(tmp_path, ext)
+        text, extract_extra = _extract_text(tmp_path, ext)
         if not text.strip():
             file_bytes = tmp_path.read_bytes() if tmp_path.exists() else content
             detail = (
                 f"无法从文件中提取文本内容。"
                 f"文件类型: {ext}，大小: {file_size} 字节。"
                 f"{'TXT 文件可能是空文件或编码不受支持。' if ext == '.txt' else ''}"
-                f"{'DOCX/DOC 文件可能只包含图片或格式不受支持。' if ext in ('.docx', '.doc') else ''}"
+                f"{'DOCX 文件可能只包含图片或格式不受支持。' if ext == '.docx' else ''}"
             )
             raise HTTPException(status_code=400, detail=detail)
     except RuntimeError as e:
@@ -393,6 +268,8 @@ async def upload_file(
         "char_count": len(text),
         "chunk_count": len(chunks),
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "extract_mode": "pdf_routed" if extract_extra.get("routed") else "legacy",
+        "route_summary": extract_extra.get("route_summary"),
     }
     metadata["files"].append(file_info)
     metadata["user_id"] = user_id or None

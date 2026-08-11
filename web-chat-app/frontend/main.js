@@ -10,7 +10,7 @@ const CONFIG = {
   MAX_RETRIES: 3,
   LOADING_DELAY: 200,
   OPTIMISTIC_UPDATE_DELAY: 100,
-  ALLOWED_FILE_TYPES: ['.txt', '.pdf', '.docx', '.doc', '.jpg', '.jpeg', '.png', '.bmp'],
+  ALLOWED_FILE_TYPES: ['.txt', '.pdf', '.docx', '.jpg', '.jpeg', '.png', '.bmp'],
   MAX_FILE_SIZE_MB: 20,
   MODELS: [
     { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
@@ -324,6 +324,10 @@ async function handleFileUpload(fileList) {
   // Validate files
   for (const file of files) {
     const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (ext === '.doc') {
+      setError(`${file.name}：暂不支持 .doc 格式，请先用 Word / WPS 将文档另存为 .docx 后再上传`);
+      return;
+    }
     if (!CONFIG.ALLOWED_FILE_TYPES.includes(ext)) {
       setError(`不支持的文件类型: ${file.name}（仅支持 ${CONFIG.ALLOWED_FILE_TYPES.join(', ')}）`);
       return;
