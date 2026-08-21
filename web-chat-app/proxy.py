@@ -60,12 +60,17 @@ async def proxy_api(path: str, request: Request):
 
 
 # Serve static files from frontend directory
+# 静态文件一律 no-store：避免浏览器/CDN/网关缓存旧版 JS/HTML，
+# 部署更新后强刷即生效（本项目前端无构建步骤，文件即产物）。
+_NO_CACHE = {"Cache-Control": "no-store"}
+
+
 @app.get("/")
 async def serve_index():
     """Serve the main HTML file"""
     index_path = FRONTEND_DIR / "index.html"
     if index_path.exists():
-        return FileResponse(index_path)
+        return FileResponse(index_path, headers=_NO_CACHE)
     return HTMLResponse("<h1>Frontend not found</h1>", status_code=404)
 
 
@@ -74,11 +79,11 @@ async def serve_static(path: str):
     """Serve static files from frontend directory"""
     file_path = FRONTEND_DIR / path
     if file_path.exists() and file_path.is_file():
-        return FileResponse(file_path)
+        return FileResponse(file_path, headers=_NO_CACHE)
     # Fallback to index.html for SPA routing
     index_path = FRONTEND_DIR / "index.html"
     if index_path.exists():
-        return FileResponse(index_path)
+        return FileResponse(index_path, headers=_NO_CACHE)
     return HTMLResponse("<h1>Not found</h1>", status_code=404)
 
 
