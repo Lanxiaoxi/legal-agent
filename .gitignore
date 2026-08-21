@@ -43,3 +43,6 @@ feedback/
 doc/
 log/
 logs/
+
+# WorkBuddy workspace memory (agent notes, not source)
+.workbuddy/

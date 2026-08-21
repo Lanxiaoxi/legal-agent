@@ -173,6 +173,7 @@ function createNewSession() {
 // Switch to a different session
 function switchSession(sessionId) {
   if (state.sessions[sessionId]) {
+    stopFilePolling();  // 旧会话轮询先停，新会话由 restoreFileList 决定是否重启
     state.currentSessionId = sessionId;
     state.selectedModel = state.sessions[sessionId].model || CONFIG.MODELS[0].value;
     state.error = null;
@@ -187,6 +188,7 @@ function switchSession(sessionId) {
 // Delete a session
 function deleteSession(sessionId) {
   const wasCurrentSession = state.currentSessionId === sessionId;
+  if (wasCurrentSession) stopFilePolling();
   
   // Fire-and-forget: clean up backend files
   fetch(`${CONFIG.FILES_URL}/${sessionId}`, { method: 'DELETE' }).catch(() => {});
@@ -396,12 +398,26 @@ async function handleFileUpload(fileList) {
 
   state.isUploading = false;
   render();
+
+  // 上传接口立即返回（status=processing），后台异步处理文本；
+  // 若有处理中的文件，启动轮询跟踪状态
+  if (state.uploadedFiles.some(f => f.status === 'processing')) {
+    startFilePolling(state.currentSessionId);
+  }
 }
 
 // Remove file tag: 真实删除后端文件（分块 + metadata），不只移除 UI
 async function removeFileTag(fileId) {
   const sessionId = state.currentSessionId;
   if (!sessionId) return;
+
+  // 上传失败/上传中的占位条目：后端并没有对应文件，直接本地移除即可，不请求后端
+  const entry = state.uploadedFiles.find(f => f.id === fileId);
+  if (entry && (entry.status === 'error' || entry.status === 'uploading' || String(fileId).startsWith('_uploading_'))) {
+    state.uploadedFiles = state.uploadedFiles.filter(f => f.id !== fileId);
+    render();
+    return;
+  }
 
   try {
     const response = await fetch(`${CONFIG.FILES_URL}/${sessionId}/${fileId}`, { method: 'DELETE' });
@@ -419,6 +435,86 @@ async function removeFileTag(fileId) {
   render();
 }
 
+// ---- 异步处理状态轮询 ----
+
+let filePollingTimer = null;
+let filePollingSession = null;
+
+function stopFilePolling() {
+  if (filePollingTimer) {
+    clearInterval(filePollingTimer);
+    filePollingTimer = null;
+  }
+  filePollingSession = null;
+}
+
+// 拉取一次文件列表并更新标签区（只更新 file-tags DOM，不整体 render，避免打断输入）
+async function syncFileList() {
+  const sessionId = state.currentSessionId;
+  if (!sessionId) return;
+  try {
+    const response = await fetch(`${CONFIG.FILES_URL}/${sessionId}`);
+    if (!response.ok) return;
+    const data = await response.json();
+    if (state.currentSessionId !== sessionId) return; // 已切换会话，丢弃结果
+    state.uploadedFiles = (data.files || []).map(f => ({ ...f, status: f.status || 'done' }));
+    renderFileTagsOnly();
+  } catch (e) {
+    // 网络抖动忽略，下一轮重试
+  }
+}
+
+// 仅更新输入框上方的文件标签 DOM
+function renderFileTagsOnly() {
+  const inputArea = document.querySelector('.input-area');
+  if (!inputArea) return;
+  const existing = inputArea.querySelector(':scope > .file-tags');
+  const html = renderFileTags();
+  if (html) {
+    if (existing) existing.outerHTML = html;
+    else inputArea.insertAdjacentHTML('afterbegin', html);
+  } else if (existing) {
+    existing.remove();
+  }
+}
+
+// 启动轮询跟踪 processing 文件，全部 done/failed 后自动停止
+function startFilePolling(sessionId) {
+  if (!sessionId) return;
+  if (filePollingTimer && filePollingSession === sessionId) return;
+  stopFilePolling();
+  filePollingSession = sessionId;
+  filePollingTimer = setInterval(async () => {
+    if (state.currentSessionId !== filePollingSession) {
+      stopFilePolling();
+      return;
+    }
+    await syncFileList();
+    const hasProcessing = state.uploadedFiles.some(f => f.status === 'processing');
+    if (!hasProcessing) stopFilePolling();
+  }, 1500);
+}
+
+// 重试失败的文件处理（后端对保留的原文件重新提取，无需重新上传）
+async function retryFile(fileId) {
+  const sessionId = state.currentSessionId;
+  if (!sessionId) return;
+  try {
+    const response = await fetch(`${CONFIG.FILES_URL}/${sessionId}/${fileId}/retry`, { method: 'POST' });
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || `重试失败 (${response.status})`);
+    }
+    const data = await response.json();
+    state.uploadedFiles = (data.files || []).map(f => ({ ...f, status: f.status || 'done' }));
+    renderFileTagsOnly();
+    startFilePolling(sessionId);
+  } catch (error) {
+    console.error('[ERROR] File retry failed:', error);
+    setError(`重试失败: ${error.message}`);
+  }
+}
+
 // Render file tags above input
 function renderFileTags() {
   if (!state.uploadedFiles || state.uploadedFiles.length === 0) return '';
@@ -426,21 +522,38 @@ function renderFileTags() {
     <div class="file-tags">
       ${state.uploadedFiles.map(f => {
         const isUploading = f.status === 'uploading';
-        const isError = f.status === 'error';
-        const isGenerated = f.generated === true;
-        const tagClass = isUploading ? 'file-tag file-tag-uploading'
+        const isProcessing = f.status === 'processing';
+        const isError = f.status === 'error' || f.status === 'failed';
+        const isGenerated = f.generated === true && !isError;
+        const showSpinner = isUploading || isProcessing;
+        const tagClass = showSpinner ? 'file-tag file-tag-uploading'
           : isError ? 'file-tag file-tag-error'
           : isGenerated ? 'file-tag file-tag-generated'
           : 'file-tag';
-        const title = isError ? `上传失败: ${escapeHtml(f.error || '未知错误')}`
-          : isGenerated ? `点击下载: ${escapeHtml(f.name)}`
-          : `${escapeHtml(f.name)} (${formatFileSize(f.size)})`;
-        const clickAction = isGenerated
-          ? ` onclick="event.stopPropagation(); downloadFile('${f.id}')"`
-          : '';
+        let title, clickAction = '';
+        if (isError) {
+          const reason = f.status === 'failed'
+            ? `处理失败: ${escapeHtml(f.error || '未知错误')}（点击重试）`
+            : `上传失败: ${escapeHtml(f.error || '未知错误')}`;
+          title = reason;
+          if (f.status === 'failed') {
+            clickAction = ` onclick="event.stopPropagation(); retryFile('${f.id}')"`;
+          }
+        } else if (isProcessing) {
+          title = `${escapeHtml(f.name)} (处理中...)`;
+        } else if (isGenerated) {
+          title = `点击下载: ${escapeHtml(f.name)}`;
+          clickAction = ` onclick="event.stopPropagation(); downloadFile('${f.id}')"`;
+        } else {
+          title = `${escapeHtml(f.name)} (${formatFileSize(f.size)})`;
+        }
+        const icon = showSpinner ? '<span class="file-spinner"></span>'
+          : isError ? '❌'
+          : isGenerated ? '⬇️'
+          : getFileIcon(f.type);
         return `
           <span class="${tagClass}" title="${title}"${clickAction}>
-            <span class="file-tag-icon">${isUploading ? '<span class="file-spinner"></span>' : isGenerated ? '⬇️' : getFileIcon(f.type)}</span>
+            <span class="file-tag-icon">${icon}</span>
             <span class="file-tag-name">${escapeHtml(f.name)}</span>
             ${isUploading ? '' : `<span class="file-tag-remove" onclick="event.stopPropagation(); removeFileTag('${f.id}')">×</span>`}
           </span>
@@ -509,6 +622,10 @@ async function restoreFileList(sessionId) {
       // 竞态保护：异步请求返回时，如果用户已经切换了会话，丢弃结果
       if (state.currentSessionId === sessionId) {
         state.uploadedFiles = data.files || [];
+        // 该会话存在处理中的文件 → 恢复轮询
+        if (state.uploadedFiles.some(f => f.status === 'processing')) {
+          startFilePolling(sessionId);
+        }
       }
     } else if (state.currentSessionId === sessionId) {
       state.uploadedFiles = [];

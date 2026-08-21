@@ -1,4 +1,5 @@
 """文件上传路由模块"""
+import asyncio
 import json
 import logging
 import shutil
@@ -183,7 +184,11 @@ async def upload_file(
     session_id: str = Form(default=""),
     user_id: str = Form(default=""),
 ):
-    """上传文件并提取文本分块存储
+    """上传文件并登记，文本提取/分块由后台任务异步完成
+
+    上传接口只负责：校验 → 保存原文件 → 登记 metadata（status=processing）→ 立即返回。
+    文本提取与分块放入后台线程池任务（asyncio.to_thread），不阻塞事件循环；
+    处理完成后更新状态为 done，失败为 failed（保留原文件供重试）。
 
     Args:
         file: 上传的文件
@@ -191,7 +196,7 @@ async def upload_file(
         user_id: 匿名用户 ID
 
     Returns:
-        {files: [{file_id, name, type, size, chunk_count, created_at}]}
+        {files: [{id, name, type, size, status, ...}]}
     """
     if not session_id:
         raise HTTPException(status_code=400, detail="session_id is required")
@@ -232,63 +237,41 @@ async def upload_file(
             detail=f"会话文件总大小超过 {MAX_SESSION_SIZE_MB}MB 限制"
         )
 
-    # 生成 file_id 并存储
+    # 生成 file_id，保存原始文件（后台处理成功后删除；失败保留供重试）
     file_id = str(uuid.uuid4())[:8]
     session_dir = _get_session_dir(session_id)
     chunks_dir = _get_chunks_dir(session_id)
+    session_dir.mkdir(parents=True, exist_ok=True)
     chunks_dir.mkdir(parents=True, exist_ok=True)
 
-    # 保存原始文件到临时路径用于提取
-    tmp_path = session_dir / f"_tmp_{file_id}{ext}"
+    saved_path = session_dir / f"{file_id}{ext}"
     content = await file.read()
-    tmp_path.write_bytes(content)
+    saved_path.write_bytes(content)
 
-    try:
-        # 提取文本
-        text, extract_extra = _extract_text(tmp_path, ext)
-        if not text.strip():
-            file_bytes = tmp_path.read_bytes() if tmp_path.exists() else content
-            detail = (
-                f"无法从文件中提取文本内容。"
-                f"文件类型: {ext}，大小: {file_size} 字节。"
-                f"{'TXT 文件可能是空文件或编码不受支持。' if ext == '.txt' else ''}"
-                f"{'DOCX 文件可能只包含图片或格式不受支持。' if ext == '.docx' else ''}"
-            )
-            raise HTTPException(status_code=400, detail=detail)
-    except RuntimeError as e:
-        # _extract_text 主动抛出的错误（如 PDF 扫描件），直接作为 400 返回
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        # 删除临时文件
-        tmp_path.unlink(missing_ok=True)
-
-    # 分块并存储
-    chunks = _chunk_text(text)
-    for i, chunk in enumerate(chunks, 1):
-        chunk_path = chunks_dir / f"{file_id}_{i:03d}.txt"
-        chunk_path.write_text(chunk, encoding="utf-8")
-
-    # 更新元数据
+    # 登记 metadata，状态 processing
     metadata = _load_metadata(session_id)
     file_info = {
         "id": file_id,
         "name": filename,
         "type": ext.lstrip("."),
         "size": file_size,
-        "char_count": len(text),
-        "chunk_count": len(chunks),
+        "char_count": 0,
+        "chunk_count": 0,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "extract_mode": "pdf_routed" if extract_extra.get("routed") else "legacy",
-        "route_summary": extract_extra.get("route_summary"),
+        "status": "processing",
+        "error": None,
     }
     metadata["files"].append(file_info)
     metadata["user_id"] = user_id or None
     metadata["last_accessed_at"] = datetime.now(timezone.utc).isoformat()
     _save_metadata(session_id, metadata)
 
+    # 后台异步处理（提取 + 分块），不阻塞上传请求
+    _schedule_process(session_id, file_id, saved_path, ext)
+
     logger.info(
         f"[UPLOAD] session={session_id} user={user_id} file={filename} "
-        f"size={file_size}B chunks={len(chunks)} file_id={file_id}"
+        f"size={file_size}B file_id={file_id} status=processing (async)"
     )
 
     return {"files": metadata["files"]}
@@ -382,6 +365,9 @@ async def delete_file(session_id: str, file_id: str):
         if chunks_dir.exists():
             for chunk_path in chunks_dir.glob(f"{file_id}_*.txt"):
                 chunk_path.unlink(missing_ok=True)
+        # 原始文件（processing/failed 期间保留，用于后台处理/重试）
+        orig_path = session_dir / f"{file_id}.{file_info.get('type', '')}"
+        orig_path.unlink(missing_ok=True)
 
     # 从元数据移除
     metadata["files"] = [f for f in files if f.get("id") != file_id]
@@ -390,6 +376,134 @@ async def delete_file(session_id: str, file_id: str):
 
     logger.info(f"[DELETE] session={session_id} file={file_id} name={file_info.get('name')}")
     return {"files": metadata["files"]}
+
+
+# ---------- 异步后台处理（上传与处理分离） ----------
+
+# 持有后台任务引用，防止被 GC；任务完成自动移除
+_background_tasks: set = set()
+
+
+def _file_record_exists(session_id: str, file_id: str) -> bool:
+    """检查文件记录是否仍存在（可能已被用户删除）"""
+    metadata = _load_metadata(session_id)
+    return any(f.get("id") == file_id for f in metadata.get("files", []))
+
+
+def _update_file_status(session_id: str, file_id: str, status: str, **fields) -> bool:
+    """更新某文件的状态字段，返回是否找到记录"""
+    metadata = _load_metadata(session_id)
+    for f in metadata.get("files", []):
+        if f.get("id") == file_id:
+            f["status"] = status
+            f.update(fields)
+            break
+    else:
+        return False  # 记录不存在（文件已被删除）
+    metadata["last_accessed_at"] = datetime.now(timezone.utc).isoformat()
+    _save_metadata(session_id, metadata)
+    return True
+
+
+def _process_file_sync(session_id: str, file_id: str, file_path: Path, ext: str) -> None:
+    """同步执行 提取文本 + 分块落盘 + 更新状态（在后台线程池中运行）
+
+    成功 → status=done，删除原文件只留分块
+    失败 → status=failed，保留原文件供前端重试
+    """
+    # 处理期间文件可能已被用户删除，跳过避免写回无效记录
+    if not _file_record_exists(session_id, file_id):
+        logger.info(f"[PROCESS] file {file_id} removed during processing, skip")
+        return
+
+    try:
+        text, extract_extra = _extract_text(file_path, ext)
+        if not text.strip():
+            detail = (
+                f"无法从文件中提取文本内容（{file_path.name}，{file_path.stat().st_size} 字节）。"
+                f"{'TXT 文件可能是空文件或编码不受支持。' if ext == '.txt' else ''}"
+                f"{'DOCX 文件可能只包含图片或格式不受支持。' if ext == '.docx' else ''}"
+            )
+            _update_file_status(session_id, file_id, "failed", error=detail)
+            return
+
+        chunks = _chunk_text(text)
+        chunks_dir = _get_chunks_dir(session_id)
+        chunks_dir.mkdir(parents=True, exist_ok=True)
+        for i, chunk in enumerate(chunks, 1):
+            (chunks_dir / f"{file_id}_{i:03d}.txt").write_text(chunk, encoding="utf-8")
+
+        _update_file_status(
+            session_id, file_id, "done",
+            char_count=len(text),
+            chunk_count=len(chunks),
+            extract_mode="pdf_routed" if extract_extra.get("routed") else "legacy",
+            route_summary=extract_extra.get("route_summary"),
+            error=None,
+        )
+        # 处理成功，删除原文件只留分块
+        file_path.unlink(missing_ok=True)
+        logger.info(
+            f"[PROCESS] session={session_id} file={file_id} done, "
+            f"chunks={len(chunks)}, removed original"
+        )
+    except Exception as e:
+        logger.error(f"[PROCESS] session={session_id} file={file_id} failed: {e}")
+        # 失败保留原文件供重试
+        _update_file_status(session_id, file_id, "failed", error=str(e))
+
+
+def _schedule_process(session_id: str, file_id: str, file_path: Path, ext: str) -> None:
+    """将文件处理任务放入后台（线程池执行，不阻塞事件循环）"""
+
+    async def _run():
+        try:
+            await asyncio.to_thread(_process_file_sync, session_id, file_id, file_path, ext)
+        except Exception as e:
+            logger.error(f"[PROCESS] unexpected error session={session_id} file={file_id}: {e}")
+            _update_file_status(session_id, file_id, "failed", error=f"处理失败: {e}")
+
+    task = asyncio.create_task(_run())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
+@router.post("/api/files/{session_id}/{file_id}/retry")
+async def retry_file(session_id: str, file_id: str):
+    """重试失败的文件处理（不重新上传，直接对保留的原文件重新提取）
+
+    Args:
+        session_id: 会话 ID
+        file_id: 文件 ID
+
+    Returns:
+        {files: 该会话文件列表}
+    """
+    metadata = _load_metadata(session_id)
+    file_info = next((f for f in metadata.get("files", []) if f.get("id") == file_id), None)
+    if not file_info:
+        raise HTTPException(status_code=404, detail="文件不存在或已过期")
+
+    status = file_info.get("status")
+    if status == "processing":
+        return {"files": metadata["files"], "message": "文件正在处理中，请稍候"}
+    if status == "done":
+        return {"files": metadata["files"], "message": "文件已处理完成"}
+
+    # failed → 重新处理
+    file_type = file_info.get("type", "")
+    orig_path = _get_session_dir(session_id) / f"{file_id}.{file_type}"
+    if not orig_path.exists():
+        raise HTTPException(
+            status_code=400,
+            detail="原始文件已丢失，无法重试，请重新上传"
+        )
+
+    _update_file_status(session_id, file_id, "processing", error=None)
+    _schedule_process(session_id, file_id, orig_path, f".{file_type}")
+
+    logger.info(f"[RETRY] session={session_id} file={file_id} rescheduled")
+    return {"files": _load_metadata(session_id)["files"], "message": "已开始重新处理"}
 
 
 # ---------- TTL 清理 ----------

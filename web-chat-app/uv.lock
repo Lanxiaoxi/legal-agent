@@ -5,10 +5,10 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
     "python_full_version >= '3.14' and sys_platform != 'win32'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32'",
-    "python_full_version == '3.11.*' and sys_platform == 'win32'",
-    "python_full_version < '3.11' and sys_platform == 'win32'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32'",
     "python_full_version == '3.11.*' and sys_platform != 'win32'",
+    "python_full_version < '3.11' and sys_platform == 'win32'",
     "python_full_version < '3.11' and sys_platform != 'win32'",
 ]
 
@@ -836,6 +836,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pdf-inspector"
+version = "1.15.0"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/50/cb/d97a2c26b180976da5662db68120f3e5941ac1b9f6985440c02a0021a5b5/pdf_inspector-1.15.0.tar.gz", hash = "sha256:25e66cb313f8523660c63b738089a5dbf953864ec4ac5411f73fe11b3339a05c", size = 1663040, upload-time = "2026-08-17T18:02:07.043Z" }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/c7/23/168814115d8a32edec4963ef288697694f10f2eacf1f013ad77a7baab240/pdf_inspector-1.15.0-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:b282814c5a86b0a4bfaec898f0d2bc914cf58e36bef93d7700e0ba52d698d8e2", size = 4799438, upload-time = "2026-08-17T18:01:56.962Z" },
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/79/86/6abb83408bba99c36c34481f17fd04767160449a342b5fcde0bd0e8a4d34/pdf_inspector-1.15.0-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:b5cc0f8f482200bb1d0bae8809fc72a36bb2113b8ff39b8903b9cf9ef9086e93", size = 4655508, upload-time = "2026-08-17T18:01:59.264Z" },
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/ea/b8/bcdba2c42533887b7a5af61e8e7d2ab2895ae6c384ece4d8a54deee8b9a9/pdf_inspector-1.15.0-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:bea9003d9be2315377697869010480c89f0754b485e6eb91fe77ff697beb4049", size = 5101242, upload-time = "2026-08-17T18:02:01.271Z" },
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/62/a4/948a596715b81c9dc5d2614ebb097f7eb938963c5c9944cda6b86322a956/pdf_inspector-1.15.0-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:652170d3c2edc9ddacc4ff078100c56d7cbcdef731468f4afc65e134b1277c4c", size = 5322060, upload-time = "2026-08-17T18:02:03.464Z" },
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/2e/f8/d07a932ccd8921ca65c53de6385117feec5efc1874f4e9d160b3db114f6b/pdf_inspector-1.15.0-cp38-abi3-win_amd64.whl", hash = "sha256:518c94a7ea5ffa47154611150a70aaa9e3afe902d84c3c3b64619a62d2d26ee9", size = 4688315, upload-time = "2026-08-17T18:02:05.279Z" },
+]
+
+[[package]]
 name = "pluggy"
 version = "1.6.0"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -1357,8 +1370,8 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
     "python_full_version >= '3.14' and sys_platform != 'win32'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32'",
-    "python_full_version == '3.11.*' and sys_platform == 'win32'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'win32'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32'",
     "python_full_version == '3.11.*' and sys_platform != 'win32'",
 ]
 sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/aa/2a/9618a122aeb2a169a28b03889a2995fe297588964333d4a7d67bdf46e147/rpds_py-2026.6.3.tar.gz", hash = "sha256:1cebd1337c242e4ec2293e541f712b2da849b29f48f0c293684b71c0632625d4", size = 64051, upload-time = "2026-06-30T07:17:53.009Z" }
@@ -1814,6 +1827,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "openai-agents" },
+    { name = "pdf-inspector" },
     { name = "pymupdf" },
     { name = "python-docx" },
     { name = "python-multipart" },
@@ -1832,6 +1846,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.100.0" },
     { name = "httpx", specifier = ">=0.24.0" },
     { name = "openai-agents", specifier = ">=0.18.3" },
+    { name = "pdf-inspector", specifier = ">=0.2.7" },
     { name = "pymupdf", specifier = ">=1.23.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
