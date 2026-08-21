@@ -48,6 +48,47 @@ class LineBreakTransformer {
   }
 }
 
+// ---- 流式节流时钟：Web Worker 定时器 ----
+// 浏览器对后台标签页的 setTimeout/setInterval 会节流（降到 ~1 次/秒甚至更久），
+// 但 Worker 内的定时器不受影响。用 Worker 每 20ms 发一个"拍子"驱动流式输出，
+// 切到其他标签页后回答仍按原节奏继续输出（而不是卡住/一次性全出）。
+let tickWorker = null;
+let tickWaiters = [];
+let tickPending = false;
+
+function startTickWorker() {
+  stopTickWorker();
+  tickWaiters = [];
+  tickPending = false;
+  const blob = new Blob(['setInterval(() => postMessage(0), 20);'], { type: 'text/javascript' });
+  tickWorker = new Worker(URL.createObjectURL(blob));
+  tickWorker.onmessage = () => {
+    const waiter = tickWaiters.shift();
+    if (waiter) waiter();
+    else tickPending = true; // 无等待者时积压一个拍子，使下一次 waitTick 立即通过
+  };
+}
+
+function stopTickWorker() {
+  if (tickWorker) {
+    tickWorker.terminate();
+    tickWorker = null;
+  }
+  tickWaiters = [];
+  tickPending = false;
+}
+
+function waitTick() {
+  return new Promise(resolve => {
+    if (tickPending) {
+      tickPending = false;
+      resolve();
+    } else {
+      tickWaiters.push(resolve);
+    }
+  });
+}
+
 // State
 let state = {
   sessions: {},           // { sessionId: { id, title, messages: [], createdAt, updatedAt, model } }
@@ -808,6 +849,9 @@ async function sendMessage() {
       .pipeThrough(new TransformStream(new LineBreakTransformer()))
       .getReader();
 
+    // 用 Web Worker 时钟驱动 20ms/块 的流式节奏（后台标签页主线程 setTimeout 会被浏览器节流）
+    startTickWorker();
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -817,8 +861,8 @@ async function sendMessage() {
         try {
           const data = JSON.parse(line.slice(6));
 
-          // 添加延迟，方便观察流式输出过程
-          await new Promise(r => setTimeout(r, 20));
+          // 等一个 20ms 拍子，保持逐字输出节奏（前后台一致，不依赖主线程定时器）
+          await waitTick();
 
             // Update content (streamed, append)
             if (data.content !== undefined && data.content !== null) {
@@ -894,6 +938,7 @@ async function sendMessage() {
       state.isStreaming = false;
       handleError(error);
   } finally {
+    stopTickWorker();
     setLoading(false);
     input.disabled = false;
     input.focus();
