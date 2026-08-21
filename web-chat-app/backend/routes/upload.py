@@ -2,7 +2,9 @@
 import asyncio
 import json
 import logging
+import os
 import shutil
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -130,6 +132,10 @@ def _chunk_text(text: str, chunk_size: int = 2000, overlap: int = 100) -> list[s
 
 # ---------- 存储管理 ----------
 
+# metadata.json 并发读写锁（并行上传/后台处理/删除都可能同时操作同一会话）
+# 线程锁而非 asyncio.Lock：后台处理在线程池中运行，也会写 metadata
+_metadata_lock = threading.Lock()
+
 
 def _get_session_dir(session_id: str) -> Path:
     return Path(config.upload_dir) / session_id
@@ -151,16 +157,35 @@ def _load_metadata(session_id: str) -> dict:
 
 
 def _save_metadata(session_id: str, metadata: dict):
+    """写 metadata：优先 tmp+原子替换（防并发读到半截），环境不支持 rename-overwrite 时回退直接写"""
     path = _get_metadata_path(session_id)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    data = json.dumps(metadata, ensure_ascii=False, indent=2)
+    try:
+        tmp_path = path.with_suffix(".json.tmp")
+        tmp_path.write_text(data, encoding="utf-8")
+        os.replace(tmp_path, path)
+    except OSError:
+        # Windows 下目标文件被外部进程占用时 rename 会失败（WinError 5）；
+        # 回退直接写（同进程并发读改写由 _metadata_lock 保护）
+        path.write_text(data, encoding="utf-8")
+
+
+def _update_metadata(session_id: str, fn) -> dict:
+    """原子地执行 读-改-写 metadata（加锁防并发丢失更新）
+
+    fn(metadata) 内部原地修改 metadata 即可；返回更新后的 metadata。
+    """
+    with _metadata_lock:
+        metadata = _load_metadata(session_id)
+        fn(metadata)
+        _save_metadata(session_id, metadata)
+        return metadata
 
 
 def _touch_access(session_id: str):
     """更新 last_accessed_at"""
-    metadata = _load_metadata(session_id)
-    metadata["last_accessed_at"] = datetime.now(timezone.utc).isoformat()
-    _save_metadata(session_id, metadata)
+    _update_metadata(session_id, lambda m: m.__setitem__("last_accessed_at", datetime.now(timezone.utc).isoformat()))
 
 
 def _get_session_total_size(session_id: str) -> int:
@@ -246,10 +271,10 @@ async def upload_file(
 
     saved_path = session_dir / f"{file_id}{ext}"
     content = await file.read()
-    saved_path.write_bytes(content)
+    # 写大文件是同步阻塞操作，丢线程池执行，避免卡住事件循环导致并行上传被串行化
+    await asyncio.to_thread(saved_path.write_bytes, content)
 
-    # 登记 metadata，状态 processing
-    metadata = _load_metadata(session_id)
+    # 文件记录（状态 processing，处理完成/失败由后台任务更新）
     file_info = {
         "id": file_id,
         "name": filename,
@@ -261,10 +286,13 @@ async def upload_file(
         "status": "processing",
         "error": None,
     }
-    metadata["files"].append(file_info)
-    metadata["user_id"] = user_id or None
-    metadata["last_accessed_at"] = datetime.now(timezone.utc).isoformat()
-    _save_metadata(session_id, metadata)
+
+    # 登记 metadata，状态 processing（原子读改写，防并行上传丢文件）
+    def _register(m):
+        m["files"].append(file_info)
+        m["user_id"] = user_id or None
+        m["last_accessed_at"] = datetime.now(timezone.utc).isoformat()
+    metadata = _update_metadata(session_id, _register)
 
     # 后台异步处理（提取 + 分块），不阻塞上传请求
     _schedule_process(session_id, file_id, saved_path, ext)
@@ -274,7 +302,8 @@ async def upload_file(
         f"size={file_size}B file_id={file_id} status=processing (async)"
     )
 
-    return {"files": metadata["files"]}
+    # files: 会话全部文件列表（前端轮询/列表用）；uploaded: 本次刚上传的文件记录（前端并行上传时对位用）
+    return {"files": metadata["files"], "uploaded": file_info}
 
 
 @router.get("/api/files/{session_id}")
@@ -369,10 +398,14 @@ async def delete_file(session_id: str, file_id: str):
         orig_path = session_dir / f"{file_id}.{file_info.get('type', '')}"
         orig_path.unlink(missing_ok=True)
 
-    # 从元数据移除
-    metadata["files"] = [f for f in files if f.get("id") != file_id]
-    metadata["last_accessed_at"] = datetime.now(timezone.utc).isoformat()
-    _save_metadata(session_id, metadata)
+    # 从元数据移除（原子读改写，防与并行上传/后台更新竞争）
+    metadata = _update_metadata(
+        session_id,
+        lambda m: (
+            m.__setitem__("files", [f for f in m.get("files", []) if f.get("id") != file_id]),
+            m.__setitem__("last_accessed_at", datetime.now(timezone.utc).isoformat()),
+        ),
+    )
 
     logger.info(f"[DELETE] session={session_id} file={file_id} name={file_info.get('name')}")
     return {"files": metadata["files"]}
@@ -391,18 +424,20 @@ def _file_record_exists(session_id: str, file_id: str) -> bool:
 
 
 def _update_file_status(session_id: str, file_id: str, status: str, **fields) -> bool:
-    """更新某文件的状态字段，返回是否找到记录"""
-    metadata = _load_metadata(session_id)
-    for f in metadata.get("files", []):
-        if f.get("id") == file_id:
-            f["status"] = status
-            f.update(fields)
-            break
-    else:
-        return False  # 记录不存在（文件已被删除）
-    metadata["last_accessed_at"] = datetime.now(timezone.utc).isoformat()
-    _save_metadata(session_id, metadata)
-    return True
+    """更新某文件的状态字段，返回是否找到记录（原子读改写，防并发丢失）"""
+    found = {"ok": False}
+
+    def _apply(m):
+        for f in m.get("files", []):
+            if f.get("id") == file_id:
+                f["status"] = status
+                f.update(fields)
+                found["ok"] = True
+                break
+        m["last_accessed_at"] = datetime.now(timezone.utc).isoformat()
+
+    _update_metadata(session_id, _apply)
+    return found["ok"]
 
 
 def _process_file_sync(session_id: str, file_id: str, file_path: Path, ext: str) -> None:

@@ -1,6 +1,7 @@
 """Legal Advisor API - 主应用入口"""
 import os
 import logging
+from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from fastapi import FastAPI
@@ -13,10 +14,10 @@ from routes.chat import router as chat_router
 from agents import set_tracing_disabled
 set_tracing_disabled(disabled=True)
 
-# 配置日志
+# 配置日志（路径可用环境变量 LOG_FILE 覆盖，默认 backend/logs/backend.log）
 LOG_DIR = Path(__file__).parent / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
-LOG_FILE = LOG_DIR / "backend.log"
+LOG_FILE = Path(os.getenv("LOG_FILE", str(LOG_DIR / "backend.log")))
 
 # 日志格式
 LOG_FORMAT = logging.Formatter(
@@ -24,16 +25,31 @@ LOG_FORMAT = logging.Formatter(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 
+
+def _make_file_handler(path: Path):
+    """创建文件 handler；文件被外部进程锁定（如句柄残留）时自动换时间戳文件名"""
+    handler = None
+    for candidate in (path, LOG_DIR / f"backend_{datetime.now():%H%M%S}.log"):
+        try:
+            handler = TimedRotatingFileHandler(
+                str(candidate), when="midnight", interval=1, backupCount=30, encoding="utf-8"
+            )
+            if candidate != path:
+                logging.getLogger(__name__).warning(
+                    f"日志文件 {path.name} 被占用，改用 {candidate.name}"
+                )
+            break
+        except OSError:
+            continue
+    if handler is None:
+        handler = logging.StreamHandler()  # 兜底：只输出到控制台
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(LOG_FORMAT)
+    return handler
+
+
 # 文件 handler — 每天轮转，保留 30 天
-file_handler = TimedRotatingFileHandler(
-    str(LOG_FILE),
-    when="midnight",
-    interval=1,
-    backupCount=30,
-    encoding="utf-8"
-)
-file_handler.setLevel(logging.INFO)
-file_handler.setFormatter(LOG_FORMAT)
+file_handler = _make_file_handler(LOG_FILE)
 
 # 控制台 handler
 console_handler = logging.StreamHandler()

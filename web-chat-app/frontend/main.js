@@ -1,9 +1,14 @@
 // Configuration
+// API 直连后端（localhost:8000），不经 proxy.py（localhost:3000）转发。
+// 原因：proxy 转发大文件时先 `await request.body()` 攒完整 body 再转发，
+// 形成 TCP 背压，Chrome 发送 12MB 会被拖慢到 8s+（第一个请求无排队反而正常）。
+// 直连后上传回到亚秒级；CORS 已由后端 allow_origins=http://localhost:3000 覆盖（页面 origin 即 3000）。
+const API_BASE = 'http://localhost:8000';
 const CONFIG = {
-  API_URL: '/api/chat',
-  UPLOAD_URL: '/api/upload',
-  FILES_URL: '/api/files',
-  FEEDBACK_URL: '/api/feedback',
+  API_URL: `${API_BASE}/api/chat`,
+  UPLOAD_URL: `${API_BASE}/api/upload`,
+  FILES_URL: `${API_BASE}/api/files`,
+  FEEDBACK_URL: `${API_BASE}/api/feedback`,
   MAX_MESSAGE_LENGTH: 5000,
   MAX_HISTORY_MESSAGES: 100,
   STORAGE_KEY: 'chat_sessions',
@@ -354,13 +359,16 @@ async function handleFileUpload(fileList) {
   // Show placeholders immediately
   state.uploadedFiles = [...state.uploadedFiles, ...placeholders];
   state.isUploading = true;
-  render();
+  // 上传期间暂停文件状态轮询：避免轮询请求（每 1.5s 一个 GET）与上传请求争用浏览器连接，
+  // 也避免轮询渲染与上传渲染互相干扰（表现为"第一个文件秒传、后续文件延迟数秒"）。
+  stopFilePolling();
+  // 只更新文件标签 DOM，不做整页 innerHTML 重绘（render() 会同步重建整个页面，阻塞主线程，
+  // 而 fetch 在 render 之后才发出，重绘越慢上传请求发出越晚）。
+  renderFileTagsOnly();
 
-  // Upload sequentially, updating each entry as it completes
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const entry = placeholders[i];
-
+  // 并行上传：每个文件独立发请求、独立处理成功/失败，互不中断。
+  // 后端保存即返回（status=processing），所以并发传输不会互相等待。
+  const uploadOne = async (file, entry) => {
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -378,24 +386,29 @@ async function handleFileUpload(fileList) {
       }
 
       const data = await response.json();
-      // Server returns all files for this session; mark them as done
-      const serverFiles = (data.files || []).map(f => ({ ...f, status: 'done' }));
-      // Combine: all server-confirmed files + remaining placeholders
-      state.uploadedFiles = [...serverFiles, ...placeholders.slice(i + 1)];
-      console.log('[INFO] File uploaded:', file.name, '→', serverFiles.length, 'files in session');
+      // uploaded: 本次刚上传的文件记录（后端返回，前端无需猜测对位）
+      const uploaded = (data.uploaded || (data.files || []).slice(-1)[0] || {});
+      return { ok: true, serverFile: { ...uploaded, status: uploaded.status || 'done' } };
     } catch (error) {
-      console.error('[ERROR] File upload failed:', error);
-      entry.status = 'error';
-      entry.error = error.message;
-      // Rebuild: keep successfully uploaded files + this error entry + remaining placeholders
-      const doneFiles = state.uploadedFiles.filter(f => f.status === 'done');
-      state.uploadedFiles = [...doneFiles, entry, ...placeholders.slice(i + 1)];
+      console.error('[ERROR] File upload failed:', file.name, error);
+      return { ok: false, error };
     }
+  };
 
-    // Re-render after each file to update its status in the UI
-    render();
-  }
+  const results = await Promise.all(files.map((file, i) => uploadOne(file, placeholders[i])));
 
+  // 汇总：只替换本次上传的占位条目，保留会话中已有文件（避免并行/多次上传互相覆盖）
+  const placeholderIds = new Set(placeholders.map(p => p.id));
+  state.uploadedFiles = state.uploadedFiles.map(f => {
+    if (!placeholderIds.has(f.id)) return f;  // 本次之外的文件原样保留
+    const idx = placeholders.findIndex(p => p.id === f.id);
+    const r = results[idx];
+    if (r.ok) {
+      console.log('[INFO] File uploaded:', files[idx].name, '→', r.serverFile.id);
+      return r.serverFile;
+    }
+    return { ...placeholders[idx], status: 'error', error: r.error.message };
+  });
   state.isUploading = false;
   render();
 
@@ -439,11 +452,18 @@ async function removeFileTag(fileId) {
 
 let filePollingTimer = null;
 let filePollingSession = null;
+// 当前在飞行的轮询 fetch 控制器。stopFilePolling / 下一次 syncFileList tick 时 abort，
+// 立即释放 Chrome 连接池中占用的连接，避免上传请求被卡在等连接空闲。
+let currentPollController = null;
 
 function stopFilePolling() {
   if (filePollingTimer) {
     clearInterval(filePollingTimer);
     filePollingTimer = null;
+  }
+  if (currentPollController) {
+    currentPollController.abort();
+    currentPollController = null;
   }
   filePollingSession = null;
 }
@@ -452,14 +472,23 @@ function stopFilePolling() {
 async function syncFileList() {
   const sessionId = state.currentSessionId;
   if (!sessionId) return;
+  // 取消上一轮仍在飞行的轮询请求（通常 stopFilePolling 已处理；这是双保险，避免相邻 tick 残留）
+  if (currentPollController) currentPollController.abort();
+  currentPollController = new AbortController();
+  const signal = currentPollController.signal;
   try {
-    const response = await fetch(`${CONFIG.FILES_URL}/${sessionId}`);
+    const response = await fetch(`${CONFIG.FILES_URL}/${sessionId}`, { signal });
     if (!response.ok) return;
     const data = await response.json();
     if (state.currentSessionId !== sessionId) return; // 已切换会话，丢弃结果
-    state.uploadedFiles = (data.files || []).map(f => ({ ...f, status: f.status || 'done' }));
+    const serverFiles = (data.files || []).map(f => ({ ...f, status: f.status || 'done' }));
+    // 合并而非覆盖：保留本地"上传中/失败"的占位条目（id 以 _uploading_ 开头，后端尚无记录），
+    // 否则轮询期间新上传的文件标签会被整列表覆盖冲掉，要等下一轮轮询才重新出现。
+    const pendingLocal = state.uploadedFiles.filter(f => String(f.id).startsWith('_uploading_'));
+    state.uploadedFiles = [...serverFiles, ...pendingLocal];
     renderFileTagsOnly();
   } catch (e) {
+    if (e.name === 'AbortError') return; // 被取消，忽略
     // 网络抖动忽略，下一轮重试
   }
 }
@@ -525,8 +554,9 @@ function renderFileTags() {
         const isProcessing = f.status === 'processing';
         const isError = f.status === 'error' || f.status === 'failed';
         const isGenerated = f.generated === true && !isError;
-        const showSpinner = isUploading || isProcessing;
-        const tagClass = showSpinner ? 'file-tag file-tag-uploading'
+        // 上传中（字节传输中）保留转圈反馈；处理中（后台提取）不转圈，靠悬停提示
+        const showSpinner = isUploading;
+        const tagClass = isUploading ? 'file-tag file-tag-uploading'
           : isError ? 'file-tag file-tag-error'
           : isGenerated ? 'file-tag file-tag-generated'
           : 'file-tag';
@@ -539,6 +569,8 @@ function renderFileTags() {
           if (f.status === 'failed') {
             clickAction = ` onclick="event.stopPropagation(); retryFile('${f.id}')"`;
           }
+        } else if (isUploading) {
+          title = `${escapeHtml(f.name)} (上传中...)`;
         } else if (isProcessing) {
           title = `${escapeHtml(f.name)} (处理中...)`;
         } else if (isGenerated) {
