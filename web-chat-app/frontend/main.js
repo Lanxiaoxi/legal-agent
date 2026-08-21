@@ -1,9 +1,10 @@
 // Configuration
-// API 直连后端 :8000（不经 proxy.py 转发大文件，避免 TCP 背压拖慢上传）。
-// API_BASE 用当前页面 hostname 动态拼接，本地(localhost)与云服务器(IP/域名)部署均可自动适配。
-// 后端需允许页面 origin 的 CORS：启动时设 CORS_ORIGIN=*（或具体源）；注意 config.json 的
-// corsOrigin 字段会覆盖环境变量，服务器上若有该文件需一并修改。
-const API_BASE = `http://${window.location.hostname}:8000`;
+// API 地址策略：
+// - 生产（页面为 https，通常由 nginx 反代 /api → 127.0.0.1:8000）：走同源相对路径
+//   /api/...，避免 mixed content 拦截与 CORS 问题，nginx 流式转发大文件也无背压。
+// - 本地开发（页面为 http）：直连 :8000（绕开 proxy.py 的大文件转发背压）。
+//   后端默认 CORS 允许 http://localhost:3000，本地无需额外配置。
+const API_BASE = window.location.protocol === 'https:' ? '' : `http://${window.location.hostname}:8000`;
 const CONFIG = {
   API_URL: `${API_BASE}/api/chat`,
   UPLOAD_URL: `${API_BASE}/api/upload`,
