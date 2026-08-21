@@ -63,10 +63,15 @@ logger = logging.getLogger(__name__)
 # 创建 FastAPI 应用
 app = FastAPI(title="Legal Advisor API")
 
-# 配置 CORS 中间件
+# 配置 CORS 中间件（支持 "*" 通配或逗号分隔多源，本地/云部署共用）
+cors_origins = (
+    ["*"]
+    if config.cors_origin == "*"
+    else [o.strip() for o in config.cors_origin.split(",") if o.strip()]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[config.cors_origin],
+    allow_origins=cors_origins,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type"]
 )

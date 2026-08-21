@@ -1,9 +1,9 @@
 // Configuration
-// API 直连后端（localhost:8000），不经 proxy.py（localhost:3000）转发。
-// 原因：proxy 转发大文件时先 `await request.body()` 攒完整 body 再转发，
-// 形成 TCP 背压，Chrome 发送 12MB 会被拖慢到 8s+（第一个请求无排队反而正常）。
-// 直连后上传回到亚秒级；CORS 已由后端 allow_origins=http://localhost:3000 覆盖（页面 origin 即 3000）。
-const API_BASE = 'http://localhost:8000';
+// API 直连后端 :8000（不经 proxy.py 转发大文件，避免 TCP 背压拖慢上传）。
+// API_BASE 用当前页面 hostname 动态拼接，本地(localhost)与云服务器(IP/域名)部署均可自动适配。
+// 后端需允许页面 origin 的 CORS：启动时设 CORS_ORIGIN=*（或具体源）；注意 config.json 的
+// corsOrigin 字段会覆盖环境变量，服务器上若有该文件需一并修改。
+const API_BASE = `http://${window.location.hostname}:8000`;
 const CONFIG = {
   API_URL: `${API_BASE}/api/chat`,
   UPLOAD_URL: `${API_BASE}/api/upload`,
